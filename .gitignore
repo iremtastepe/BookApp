@@ -1,0 +1,42 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build folders
+[Bb]in/
+[Oo]bj/
+
+# .NET build outputs
+*.dll
+*.exe
+*.pdb
+
+# Visual Studio Code
+.vscode/
+
+# User-specific files
+*.user
+*.userosscache
+*.sln.docstates
+
+# Test results
+TestResults/
+*.trx
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
+# ASP.NET generated files
+wwwroot/lib/
+
+# Logs
+*.log
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+appsettings.json
