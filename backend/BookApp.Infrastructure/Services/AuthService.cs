@@ -8,6 +8,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 
+using BookApp.Domain.Exceptions;
+
 namespace BookApp.Infrastructure.Services;
 
 public class AuthService : IAuthService
@@ -24,11 +26,11 @@ public class AuthService : IAuthService
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
     {
         if (request.Password != request.ConfirmPassword)
-            throw new Exception("Şifreler eşleşmiyor.");
+            throw new AuthException("Şifreler eşleşmiyor.");
 
         var existingUser = await _userManager.FindByEmailAsync(request.Email);
         if (existingUser != null)
-            throw new Exception("Bu email zaten kayıtlı.");
+            throw new AuthException("Bu email zaten kayıtlı.");
 
         var user = new User
         {
@@ -38,7 +40,7 @@ public class AuthService : IAuthService
 
         var result = await _userManager.CreateAsync(user, request.Password);
         if (!result.Succeeded)
-            throw new Exception(string.Join(", ", result.Errors.Select(e => e.Description)));
+            throw new AuthException(string.Join(", ", result.Errors.Select(e => e.Description)));
 
         var token = GenerateToken(user);
 
@@ -55,11 +57,11 @@ public class AuthService : IAuthService
     {
         var user = await _userManager.FindByEmailAsync(request.Email);
         if (user == null)
-            throw new Exception("Email veya şifre hatalı.");
+            throw new AuthException("Email veya şifre hatalı.");
 
         var isPasswordValid = await _userManager.CheckPasswordAsync(user, request.Password);
         if (!isPasswordValid)
-            throw new Exception("Email veya şifre hatalı.");
+            throw new AuthException("Email veya şifre hatalı.");
 
         var token = GenerateToken(user);
 

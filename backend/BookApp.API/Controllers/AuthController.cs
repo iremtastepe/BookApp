@@ -1,5 +1,6 @@
 using BookApp.Application.DTOs.Auth;
 using BookApp.Application.Interfaces;
+using BookApp.Domain.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BookApp.API.Controllers;
@@ -23,9 +24,13 @@ public class AuthController : ControllerBase
             var response = await _authService.RegisterAsync(request);
             return Ok(response);
         }
-        catch (Exception ex)
+        catch (AuthException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { message = "Sunucu tarafında beklenmeyen bir hata oluştu." });
         }
     }
 
@@ -37,9 +42,13 @@ public class AuthController : ControllerBase
             var response = await _authService.LoginAsync(request);
             return Ok(response);
         }
-        catch (Exception ex)
+        catch (AuthException ex)
         {
             return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { message = "Sunucu tarafında beklenmeyen bir hata oluştu." });
         }
     }
 }
