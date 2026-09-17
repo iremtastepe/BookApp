@@ -13,15 +13,6 @@ public class Book
     public int? PageCount { get; set; }
     public int? PublishedYear { get; set; }
     public string? Genre { get; set; }
-    public ReadingStatus Status { get; set; } = ReadingStatus.NotStarted;
-    public bool IsFavorite { get; set; } = false;
-    public int? Rating { get; set; }
-    public DateTime? StartedAt { get; set; }
-    public DateTime? FinishedAt { get; set; }
-    public DateTime AddedAt { get; set; } = DateTime.UtcNow;
 
-    public int UserId { get; set; }
-    public User? User { get; set; }
-
-    public List<Note> Notes { get; set; } = new();
+    public ICollection<UserBook> UserBooks { get; set; } = new List<UserBook>();
 }
