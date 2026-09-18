@@ -13,6 +13,7 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
 
     public DbSet<Book> Books => Set<Book>();
     public DbSet<Note> Notes => Set<Note>();
+    public DbSet<UserBook> UserBooks => Set<UserBook>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -26,5 +27,8 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
         builder.Entity<IdentityUserLogin<int>>().ToTable("UserLogins");
         builder.Entity<IdentityRoleClaim<int>>().ToTable("RoleClaims");
         builder.Entity<IdentityUserToken<int>>().ToTable("UserTokens");
+        
+        
+        builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 }

@@ -3,6 +3,7 @@ using System;
 using BookApp.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BookApp.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260918172146_AddBookUserBookNote")]
+    partial class AddBookUserBookNote
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -56,7 +59,12 @@ namespace BookApp.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int?>("UserId")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("Books");
                 });
@@ -75,9 +83,6 @@ namespace BookApp.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("PageNumber")
-                        .HasColumnType("integer");
 
                     b.Property<int>("UserBookId")
                         .HasColumnType("integer");
@@ -333,6 +338,13 @@ namespace BookApp.Infrastructure.Migrations
                     b.ToTable("UserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("BookApp.Domain.Entities.Book", b =>
+                {
+                    b.HasOne("BookApp.Domain.Entities.User", null)
+                        .WithMany("Books")
+                        .HasForeignKey("UserId");
+                });
+
             modelBuilder.Entity("BookApp.Domain.Entities.Note", b =>
                 {
                     b.HasOne("BookApp.Domain.Entities.UserBook", "UserBook")
@@ -353,7 +365,7 @@ namespace BookApp.Infrastructure.Migrations
                         .IsRequired();
 
                     b.HasOne("BookApp.Domain.Entities.User", "User")
-                        .WithMany("UserBooks")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -421,7 +433,7 @@ namespace BookApp.Infrastructure.Migrations
 
             modelBuilder.Entity("BookApp.Domain.Entities.User", b =>
                 {
-                    b.Navigation("UserBooks");
+                    b.Navigation("Books");
                 });
 
             modelBuilder.Entity("BookApp.Domain.Entities.UserBook", b =>

@@ -5,5 +5,5 @@ namespace BookApp.Domain.Entities;
 public class User : IdentityUser<int>
 {
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public List<Book> Books { get; set; } = new();
+    public ICollection<UserBook> UserBooks { get; set; } = new List<UserBook>();
 }
