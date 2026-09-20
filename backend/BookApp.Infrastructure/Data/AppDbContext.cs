@@ -27,8 +27,12 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
         builder.Entity<IdentityUserLogin<int>>().ToTable("UserLogins");
         builder.Entity<IdentityRoleClaim<int>>().ToTable("RoleClaims");
         builder.Entity<IdentityUserToken<int>>().ToTable("UserTokens");
-        
-        
+
+        // Bir kullanıcı aynı kitabı kitaplığına iki kez ekleyemesin
+        builder.Entity<UserBook>()
+            .HasIndex(ub => new { ub.UserId, ub.BookId })
+            .IsUnique();
+
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 }

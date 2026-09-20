@@ -8,8 +8,8 @@ using Microsoft.OpenApi;
 using System.Text;
 using BookApp.Application.Interfaces;
 using BookApp.Infrastructure.Services;
-using BookApp.Application.Services;          // YENİ: BookService için
-using BookApp.Infrastructure.Repositories;   // YENİ: BookRepository için
+using BookApp.Application.Services;          // BookService ve UserBookService için
+using BookApp.Infrastructure.Repositories;   // BookRepository ve UserBookRepository için
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,8 +54,10 @@ builder.Services.AddControllers();
 
 // Servis kayıtları (DI)
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IBookRepository, BookRepository>();   // YENİ
-builder.Services.AddScoped<IBookService, BookService>();          // YENİ
+builder.Services.AddScoped<IBookRepository, BookRepository>();
+builder.Services.AddScoped<IBookService, BookService>();
+builder.Services.AddScoped<IUserBookRepository, UserBookRepository>();   // YENİ
+builder.Services.AddScoped<IUserBookService, UserBookService>();          // YENİ
 
 // 4) Swagger UI + JWT desteği (Authorize butonu için)
 builder.Services.AddEndpointsApiExplorer();
