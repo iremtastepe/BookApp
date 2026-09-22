@@ -5,4 +5,5 @@ namespace BookApp.Application.Interfaces;
 public interface IUserBookService
 {
     Task<UserBookDto> AddToLibraryAsync(int userId, AddToLibraryRequest request);
+    Task<List<UserBookDto>> GetLibraryAsync(int userId);
 }

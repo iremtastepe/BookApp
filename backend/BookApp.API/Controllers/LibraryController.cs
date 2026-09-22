@@ -38,4 +38,11 @@ public class LibraryController : ControllerBase
             return Conflict(new { message = ex.Message });
         }
     }
+
+    [HttpGet]
+    public async Task<ActionResult<List<UserBookDto>>> GetLibrary()
+    {
+        var result = await _userBookService.GetLibraryAsync(GetUserId());
+        return Ok(result);
+    }
 }

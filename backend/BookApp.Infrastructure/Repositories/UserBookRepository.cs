@@ -28,4 +28,11 @@ public class UserBookRepository : IUserBookRepository
         => _context.UserBooks
             .Include(ub => ub.Book)
             .FirstOrDefaultAsync(ub => ub.Id == id && ub.UserId == userId);
+
+    public Task<List<UserBook>> GetAllByUserIdAsync(int userId)
+        => _context.UserBooks
+            .Include(ub => ub.Book)
+            .Where(ub => ub.UserId == userId)
+            .OrderByDescending(ub => ub.AddedAt)
+            .ToListAsync();
 }

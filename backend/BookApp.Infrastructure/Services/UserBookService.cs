@@ -31,24 +31,33 @@ public class UserBookService : IUserBookService
             BookId = request.BookId,
             Status = ReadingStatus.NotStarted,
             IsFavorite = false,
-            AddedAt = DateTime.UtcNow
+            AddedAt = DateTime.UtcNow,
+            Book = book
         };
 
         await _userBookRepository.AddAsync(userBook);
 
-        return new UserBookDto
-        {
-            Id = userBook.Id,
-            BookId = book.Id,
-            Title = book.Title,
-            Author = book.Author,
-            CoverImageUrl = book.CoverImageUrl,
-            Status = userBook.Status,
-            IsFavorite = userBook.IsFavorite,
-            Rating = userBook.Rating,
-            StartedAt = userBook.StartedAt,
-            FinishedAt = userBook.FinishedAt,
-            AddedAt = userBook.AddedAt
-        };
+        return MapToDto(userBook);
     }
+
+    public async Task<List<UserBookDto>> GetLibraryAsync(int userId)
+    {
+        var userBooks = await _userBookRepository.GetAllByUserIdAsync(userId);
+        return userBooks.Select(MapToDto).ToList();
+    }
+
+    private static UserBookDto MapToDto(UserBook userBook) => new()
+    {
+        Id = userBook.Id,
+        BookId = userBook.BookId,
+        Title = userBook.Book.Title,
+        Author = userBook.Book.Author,
+        CoverImageUrl = userBook.Book.CoverImageUrl,
+        Status = userBook.Status,
+        IsFavorite = userBook.IsFavorite,
+        Rating = userBook.Rating,
+        StartedAt = userBook.StartedAt,
+        FinishedAt = userBook.FinishedAt,
+        AddedAt = userBook.AddedAt
+    };
 }
