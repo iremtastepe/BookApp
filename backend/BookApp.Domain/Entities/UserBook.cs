@@ -17,6 +17,7 @@ public class UserBook
     public int? Rating { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? FinishedAt { get; set; }
+    public DateTime? DidNotFinishAt { get; set; }
     public DateTime AddedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<Note> Notes { get; set; } = new List<Note>();

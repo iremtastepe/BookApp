@@ -8,4 +8,5 @@ public interface IUserBookRepository
     Task<UserBook> AddAsync(UserBook userBook);
     Task<UserBook?> GetByIdWithBookAsync(int id, int userId);
     Task<List<UserBook>> GetAllByUserIdAsync(int userId);
+    Task UpdateAsync(UserBook userBook);
 }

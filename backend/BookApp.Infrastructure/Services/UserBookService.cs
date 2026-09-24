@@ -46,6 +46,32 @@ public class UserBookService : IUserBookService
         return userBooks.Select(MapToDto).ToList();
     }
 
+    public async Task<UserBookDto> UpdateStatusAsync(int userId, int userBookId, UpdateUserBookStatusRequest request)
+    {
+        var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
+        if (userBook is null)
+            throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");  // 404
+
+        userBook.Status = request.Status;
+
+        switch (request.Status)
+        {
+            case ReadingStatus.Reading:
+                userBook.StartedAt = DateTime.UtcNow;
+                break;
+            case ReadingStatus.Read:
+                userBook.FinishedAt = DateTime.UtcNow;
+                break;
+            case ReadingStatus.DidNotFinish:
+                userBook.DidNotFinishAt = DateTime.UtcNow;
+                break;
+        }
+
+        await _userBookRepository.UpdateAsync(userBook);
+
+        return MapToDto(userBook);
+    }
+
     private static UserBookDto MapToDto(UserBook userBook) => new()
     {
         Id = userBook.Id,
@@ -58,6 +84,7 @@ public class UserBookService : IUserBookService
         Rating = userBook.Rating,
         StartedAt = userBook.StartedAt,
         FinishedAt = userBook.FinishedAt,
+        DidNotFinishAt = userBook.DidNotFinishAt,
         AddedAt = userBook.AddedAt
     };
 }

@@ -49,6 +49,16 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 
@@ -90,6 +100,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors("AllowAll"); // CORS politikasını Auth'dan hemen önce etkinleştir
 
 app.UseAuthentication();  // Önce "sen kimsin" kontrolü
 app.UseAuthorization();   // Sonra "bunu yapmaya yetkin var mı" kontrolü

@@ -15,4 +15,5 @@ public class UserBookDto
     public DateTime? StartedAt { get; set; }
     public DateTime? FinishedAt { get; set; }
     public DateTime AddedAt { get; set; }
+    public DateTime? DidNotFinishAt { get; set; }
 }

@@ -45,4 +45,18 @@ public class LibraryController : ControllerBase
         var result = await _userBookService.GetLibraryAsync(GetUserId());
         return Ok(result);
     }
+
+    [HttpPut("{id}/status")]
+    public async Task<ActionResult<UserBookDto>> UpdateStatus(int id, UpdateUserBookStatusRequest request)
+    {
+        try
+        {
+            var result = await _userBookService.UpdateStatusAsync(GetUserId(), id, request);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
 }

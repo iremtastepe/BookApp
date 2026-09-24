@@ -35,4 +35,10 @@ public class UserBookRepository : IUserBookRepository
             .Where(ub => ub.UserId == userId)
             .OrderByDescending(ub => ub.AddedAt)
             .ToListAsync();
+
+    public Task UpdateAsync(UserBook userBook)
+    {
+        _context.UserBooks.Update(userBook);
+        return _context.SaveChangesAsync();
+    }
 }
