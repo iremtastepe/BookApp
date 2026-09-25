@@ -59,4 +59,18 @@ public class LibraryController : ControllerBase
             return NotFound(new { message = ex.Message });
         }
     }
+
+    [HttpPut("{id}/review")]
+    public async Task<ActionResult<UserBookDto>> UpdateReviewAndRating(int id, UpdateReviewAndRatingRequest request)
+    {
+        try
+        {
+            var result = await _userBookService.UpdateReviewAndRatingAsync(GetUserId(), id, request);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
 }

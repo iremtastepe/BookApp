@@ -72,6 +72,20 @@ public class UserBookService : IUserBookService
         return MapToDto(userBook);
     }
 
+    public async Task<UserBookDto> UpdateReviewAndRatingAsync(int userId, int userBookId, UpdateReviewAndRatingRequest request)
+    {
+        var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
+        if (userBook is null)
+            throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");
+
+        userBook.Rating = request.Rating;
+        userBook.Review = request.Review;
+
+        await _userBookRepository.UpdateAsync(userBook);
+
+        return MapToDto(userBook);
+    }
+
     private static UserBookDto MapToDto(UserBook userBook) => new()
     {
         Id = userBook.Id,
@@ -82,6 +96,7 @@ public class UserBookService : IUserBookService
         Status = userBook.Status,
         IsFavorite = userBook.IsFavorite,
         Rating = userBook.Rating,
+        Review = userBook.Review,
         StartedAt = userBook.StartedAt,
         FinishedAt = userBook.FinishedAt,
         DidNotFinishAt = userBook.DidNotFinishAt,

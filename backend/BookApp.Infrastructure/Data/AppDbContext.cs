@@ -33,6 +33,12 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
             .HasIndex(ub => new { ub.UserId, ub.BookId })
             .IsUnique();
 
+        // Rating alanı: 1.0 - 5.0 arası, 0.5 adımlarla (tek ondalık basamak yeterli)
+        // decimal(2,1) => toplam 2 basamak, 1'i ondalık kısımda (örn: 4.5, 1.0, 5.0)
+        builder.Entity<UserBook>()
+            .Property(ub => ub.Rating)
+            .HasPrecision(2, 1);
+
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 }

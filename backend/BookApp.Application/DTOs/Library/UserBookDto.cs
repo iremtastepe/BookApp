@@ -11,7 +11,8 @@ public class UserBookDto
     public string? CoverImageUrl { get; set; }
     public ReadingStatus Status { get; set; }
     public bool IsFavorite { get; set; }
-    public int? Rating { get; set; }
+    public decimal? Rating { get; set; }
+    public string? Review { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? FinishedAt { get; set; }
     public DateTime AddedAt { get; set; }
