@@ -78,6 +78,9 @@ public class UserBookService : IUserBookService
         if (userBook is null)
             throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");
 
+        if (userBook.Status != ReadingStatus.Read && userBook.Status != ReadingStatus.DidNotFinish)
+            throw new InvalidOperationException("Bir kitaba yorum yapmak veya puan vermek için kitabı bitirmiş veya okumayı bırakmış olmalısınız.");
+
         userBook.Rating = request.Rating;
         userBook.Review = request.Review;
 
