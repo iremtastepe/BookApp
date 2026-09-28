@@ -34,6 +34,23 @@ public class BooksController : ControllerBase
         return book is null ? NotFound() : Ok(book);
     }
 
+    [HttpGet("search-by-isbn")]
+    public async Task<ActionResult<BookResponse>> SearchByIsbn([FromQuery] string isbn)
+    {
+        if (string.IsNullOrWhiteSpace(isbn))
+            return BadRequest(new { message = "ISBN boş olamaz." });
+
+        try
+        {
+            var book = await _bookService.FindOrFetchByIsbnAsync(isbn);
+            return Ok(book);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
     [HttpPost]
     public async Task<ActionResult<BookResponse>> Create(CreateBookRequest request)
     {

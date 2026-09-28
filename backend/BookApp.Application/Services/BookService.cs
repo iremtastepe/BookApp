@@ -1,5 +1,6 @@
 using BookApp.Application.DTOs.Books;
 using BookApp.Application.Interfaces;
+using BookApp.Application.Interfaces.ExternalServices;
 using BookApp.Domain.Entities;
 
 namespace BookApp.Application.Services;
@@ -7,10 +8,12 @@ namespace BookApp.Application.Services;
 public class BookService : IBookService
 {
     private readonly IBookRepository _repo;
+    private readonly IBookLookupService _lookupService;
 
-    public BookService(IBookRepository repo)
+    public BookService(IBookRepository repo, IBookLookupService lookupService)
     {
         _repo = repo;
+        _lookupService = lookupService;
     }
 
     public async Task<PagedResponse<BookResponse>> GetBooksAsync(string? search, int page, int pageSize)
@@ -98,6 +101,39 @@ public class BookService : IBookService
 
         await _repo.DeleteAsync(book);
         return true;
+    }
+
+    public async Task<BookResponse> FindOrFetchByIsbnAsync(string isbn)
+    {
+        var trimmedIsbn = isbn.Trim();
+
+        var existingBook = await _repo.GetByIsbnAsync(trimmedIsbn);
+        if (existingBook is not null)
+        {
+            return ToResponse(existingBook);
+        }
+
+        var externalBook = await _lookupService.SearchByIsbnAsync(trimmedIsbn);
+        if (externalBook is null)
+        {
+            throw new KeyNotFoundException("Bu ISBN ile eşleşen bir kitap bulunamadı.");
+        }
+
+        var newBook = new Book
+        {
+            Title = externalBook.Title,
+            Author = externalBook.Author,
+            Isbn = externalBook.Isbn ?? trimmedIsbn,
+            CoverImageUrl = externalBook.CoverImageUrl,
+            Description = externalBook.Description,
+            PageCount = externalBook.PageCount,
+            PublishedYear = externalBook.PublishedYear,
+            Genre = externalBook.Genre
+        };
+
+        await _repo.AddAsync(newBook);
+
+        return ToResponse(newBook);
     }
 
     private static BookResponse ToResponse(Book b) => new()

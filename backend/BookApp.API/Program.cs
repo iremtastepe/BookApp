@@ -1,4 +1,5 @@
 using BookApp.Domain.Entities;
+using BookApp.Infrastructure;
 using BookApp.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -68,6 +69,9 @@ builder.Services.AddScoped<IBookRepository, BookRepository>();
 builder.Services.AddScoped<IBookService, BookService>();
 builder.Services.AddScoped<IUserBookRepository, UserBookRepository>();   // YENİ
 builder.Services.AddScoped<IUserBookService, UserBookService>();          // YENİ
+
+// Altyapı (Infrastructure) servislerimizi kaydediyoruz (İşçiler ve Şef)
+builder.Services.AddInfrastructureServices();
 
 // 4) Swagger UI + JWT desteği (Authorize butonu için)
 builder.Services.AddEndpointsApiExplorer();

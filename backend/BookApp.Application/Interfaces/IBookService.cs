@@ -9,4 +9,5 @@ public interface IBookService
     Task<BookResponse> CreateAsync(CreateBookRequest request);
     Task<BookResponse?> UpdateAsync(int id, UpdateBookRequest request);
     Task<bool> DeleteAsync(int id);
+    Task<BookResponse> FindOrFetchByIsbnAsync(string isbn);
 }
