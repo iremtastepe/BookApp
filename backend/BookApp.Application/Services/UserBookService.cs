@@ -89,6 +89,19 @@ public class UserBookService : IUserBookService
         return MapToDto(userBook);
     }
 
+    public async Task<UserBookDto> SetFavoriteAsync(int userId, int userBookId, SetFavoriteRequest request)
+    {
+        var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
+        if (userBook is null)
+            throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");  // 404
+
+        userBook.IsFavorite = request.IsFavorite;
+
+        await _userBookRepository.UpdateAsync(userBook);
+
+        return MapToDto(userBook);
+    }
+
     private static UserBookDto MapToDto(UserBook userBook) => new()
     {
         Id = userBook.Id,

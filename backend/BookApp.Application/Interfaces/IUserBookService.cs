@@ -8,4 +8,5 @@ public interface IUserBookService
     Task<List<UserBookDto>> GetLibraryAsync(int userId);
     Task<UserBookDto> UpdateStatusAsync(int userId, int userBookId, UpdateUserBookStatusRequest request);
     Task<UserBookDto> UpdateReviewAndRatingAsync(int userId, int userBookId, UpdateReviewAndRatingRequest request);
+    Task<UserBookDto> SetFavoriteAsync(int userId, int userBookId, SetFavoriteRequest request);
 }

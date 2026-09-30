@@ -77,4 +77,18 @@ public class LibraryController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    [HttpPut("{id}/favorite")]
+    public async Task<ActionResult<UserBookDto>> SetFavorite(int id, SetFavoriteRequest request)
+    {
+        try
+        {
+            var result = await _userBookService.SetFavoriteAsync(GetUserId(), id, request);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
 }
