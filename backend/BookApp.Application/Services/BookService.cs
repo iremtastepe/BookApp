@@ -1,4 +1,5 @@
 using BookApp.Application.DTOs.Books;
+using BookApp.Application.Helpers;
 using BookApp.Application.Interfaces;
 using BookApp.Application.Interfaces.ExternalServices;
 using BookApp.Domain.Entities;
@@ -40,8 +41,13 @@ public class BookService : IBookService
 
     public async Task<BookResponse> CreateAsync(CreateBookRequest request)
     {
-        if (!string.IsNullOrWhiteSpace(request.Isbn) &&
-            await _repo.GetByIsbnAsync(request.Isbn.Trim()) is not null)
+        // DEGISTI: ISBN doluysa temizle, dogrula, ISBN-13'e cevir
+        var normalizedIsbn = string.IsNullOrWhiteSpace(request.Isbn)
+            ? null
+            : IsbnHelper.Normalize(request.Isbn);
+
+        if (normalizedIsbn is not null &&
+            await _repo.GetByIsbnAsync(normalizedIsbn) is not null)
         {
             throw new InvalidOperationException("Bu ISBN ile kayıtlı bir kitap zaten var.");
         }
@@ -50,7 +56,7 @@ public class BookService : IBookService
         {
             Title = request.Title.Trim(),
             Author = request.Author.Trim(),
-            Isbn = request.Isbn?.Trim(),
+            Isbn = normalizedIsbn, // DEGISTI
             CoverImageUrl = request.CoverImageUrl,
             Description = request.Description,
             PageCount = request.PageCount,
@@ -67,9 +73,14 @@ public class BookService : IBookService
         var book = await _repo.GetByIdAsync(id);
         if (book is null) return null;
 
-        if (!string.IsNullOrWhiteSpace(request.Isbn))
+        // DEGISTI: ISBN doluysa temizle, dogrula, ISBN-13'e cevir
+        var normalizedIsbn = string.IsNullOrWhiteSpace(request.Isbn)
+            ? null
+            : IsbnHelper.Normalize(request.Isbn);
+
+        if (normalizedIsbn is not null)
         {
-            var existing = await _repo.GetByIsbnAsync(request.Isbn.Trim());
+            var existing = await _repo.GetByIsbnAsync(normalizedIsbn);
             if (existing is not null && existing.Id != id)
             {
                 throw new InvalidOperationException("Bu ISBN başka bir kitapta kayıtlı.");
@@ -78,7 +89,7 @@ public class BookService : IBookService
 
         book.Title = request.Title.Trim();
         book.Author = request.Author.Trim();
-        book.Isbn = request.Isbn?.Trim();
+        book.Isbn = normalizedIsbn; // DEGISTI
         book.CoverImageUrl = request.CoverImageUrl;
         book.Description = request.Description;
         book.PageCount = request.PageCount;
@@ -105,15 +116,16 @@ public class BookService : IBookService
 
     public async Task<BookResponse> FindOrFetchByIsbnAsync(string isbn)
     {
-        var trimmedIsbn = isbn.Trim();
+        // DEGISTI: Trim yerine tam normalizasyon (temizle, dogrula, ISBN-13)
+        var normalizedIsbn = IsbnHelper.Normalize(isbn);
 
-        var existingBook = await _repo.GetByIsbnAsync(trimmedIsbn);
+        var existingBook = await _repo.GetByIsbnAsync(normalizedIsbn);
         if (existingBook is not null)
         {
             return ToResponse(existingBook);
         }
 
-        var externalBook = await _lookupService.SearchByIsbnAsync(trimmedIsbn);
+        var externalBook = await _lookupService.SearchByIsbnAsync(normalizedIsbn);
         if (externalBook is null)
         {
             throw new KeyNotFoundException("Bu ISBN ile eşleşen bir kitap bulunamadı.");
@@ -123,7 +135,7 @@ public class BookService : IBookService
         {
             Title = externalBook.Title,
             Author = externalBook.Author,
-            Isbn = externalBook.Isbn ?? trimmedIsbn,
+            Isbn = normalizedIsbn, // DEGISTI: aranan ISBN kaydedilir, ayni ISBN tekrar aranirsa DB'de bulunur
             CoverImageUrl = externalBook.CoverImageUrl,
             Description = externalBook.Description,
             PageCount = externalBook.PageCount,

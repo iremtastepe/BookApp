@@ -54,6 +54,10 @@ public class UserBookService : IUserBookService
 
         userBook.Status = request.Status;
 
+        // DEĞİŞTİ: Kitap artık "Read" değilse favori olamaz, favoriyi otomatik kaldır
+        if (request.Status != ReadingStatus.Read)
+            userBook.IsFavorite = false;
+
         switch (request.Status)
         {
             case ReadingStatus.Reading:
@@ -94,6 +98,10 @@ public class UserBookService : IUserBookService
         var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
         if (userBook is null)
             throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");  // 404
+
+        // DEĞİŞTİ: Sadece okunmuş kitaplar favoriye eklenebilir (favoriden çıkarmak her zaman serbest)
+        if (request.IsFavorite && userBook.Status != ReadingStatus.Read)
+            throw new InvalidOperationException("Sadece okuduğun kitapları favorilere ekleyebilirsin.");  // 409
 
         userBook.IsFavorite = request.IsFavorite;
 

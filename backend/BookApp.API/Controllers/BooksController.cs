@@ -45,6 +45,10 @@ public class BooksController : ControllerBase
             var book = await _bookService.FindOrFetchByIsbnAsync(isbn);
             return Ok(book);
         }
+        catch (ArgumentException ex) // DEGISTI: gecersiz ISBN -> 400
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         catch (KeyNotFoundException ex)
         {
             return NotFound(new { message = ex.Message });
@@ -59,6 +63,10 @@ public class BooksController : ControllerBase
             var created = await _bookService.CreateAsync(request);
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
         }
+        catch (ArgumentException ex) // DEGISTI: gecersiz ISBN -> 400
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         catch (InvalidOperationException ex)
         {
             return Conflict(new { message = ex.Message });
@@ -72,6 +80,10 @@ public class BooksController : ControllerBase
         {
             var updated = await _bookService.UpdateAsync(id, request);
             return updated is null ? NotFound() : Ok(updated);
+        }
+        catch (ArgumentException ex) // DEGISTI: gecersiz ISBN -> 400
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
