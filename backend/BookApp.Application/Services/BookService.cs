@@ -128,7 +128,7 @@ public class BookService : IBookService
         var externalBook = await _lookupService.SearchByIsbnAsync(normalizedIsbn);
         if (externalBook is null)
         {
-            throw new KeyNotFoundException("Bu ISBN ile eşleşen bir kitap bulunamadı.");
+                       throw new KeyNotFoundException("Bu ISBN ile eşleşen bir kitap bulunamadı. Kitabı manuel ekleyebilirsiniz.");
         }
 
         var newBook = new Book

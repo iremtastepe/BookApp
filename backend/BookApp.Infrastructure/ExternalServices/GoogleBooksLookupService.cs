@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BookApp.Application.DTOs.External;
+using BookApp.Application.Exceptions;
 using BookApp.Application.Interfaces.ExternalServices;
 using Microsoft.Extensions.Configuration;
 
@@ -7,6 +8,8 @@ namespace BookApp.Infrastructure.ExternalServices;
 
 public class GoogleBooksLookupService : IBookLookupService
 {
+    private const string ServiceName = "Google Books";
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
 
@@ -20,26 +23,40 @@ public class GoogleBooksLookupService : IBookLookupService
     {
         var apiKey = _configuration["ExternalApis:GoogleBooks:ApiKey"];
         var requestUrl = $"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}";
-        
+
         if (!string.IsNullOrEmpty(apiKey))
         {
             requestUrl += $"&key={apiKey}";
         }
 
-        var client = _httpClientFactory.CreateClient("GoogleBooksClient");
-        var response = await client.GetAsync(requestUrl);
-
-        if (!response.IsSuccessStatusCode)
+        string content;
+        try
         {
-            return null; // Veya loglama yapılabilir
+            var client = _httpClientFactory.CreateClient("GoogleBooksClient");
+            var response = await client.GetAsync(requestUrl);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new ExternalServiceUnavailableException(
+                    ServiceName,
+                    $"{ServiceName} {(int)response.StatusCode} koduyla yanıt verdi.");
+            }
+
+            content = await response.Content.ReadAsStringAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ExternalServiceUnavailableException(ServiceName, $"{ServiceName} servisine ulaşılamadı.", ex);
+        }
+        catch (TaskCanceledException ex)
+        {
+            throw new ExternalServiceUnavailableException(ServiceName, $"{ServiceName} zamanında yanıt vermedi.", ex);
         }
 
-        var content = await response.Content.ReadAsStringAsync();
-        using var jsonDoc = JsonDocument.Parse(content);
-
+        using var jsonDoc = ParseOrThrow(content);
         var root = jsonDoc.RootElement;
-        
-        // Eğer totalItems 0 ise kitap bulunamamıştır
+
+        // Eğer totalItems 0 ise kitap gerçekten bulunamamıştır
         if (!root.TryGetProperty("totalItems", out var totalItemsElement) || totalItemsElement.GetInt32() == 0)
         {
             return null;
@@ -57,7 +74,9 @@ public class GoogleBooksLookupService : IBookLookupService
         }
 
         // Title
-        var title = volumeInfo.TryGetProperty("title", out var titleElement) ? titleElement.GetString() ?? "Bilinmeyen Kitap" : "Bilinmeyen Kitap";
+        var title = volumeInfo.TryGetProperty("title", out var titleElement)
+            ? titleElement.GetString() ?? "Bilinmeyen Kitap"
+            : "Bilinmeyen Kitap";
 
         // Authors
         var author = "Bilinmeyen Yazar";
@@ -82,7 +101,7 @@ public class GoogleBooksLookupService : IBookLookupService
             if (imageLinks.TryGetProperty("thumbnail", out var thumbnailElement))
             {
                 coverUrl = thumbnailElement.GetString();
-                // Google Books bazen http döndürür, frontend'de karmaşık içerik hatası (mixed content) olmaması için https yapalım
+                // Google Books bazen http döndürür, frontend'de mixed content hatası olmasın diye https yapıyoruz
                 if (!string.IsNullOrEmpty(coverUrl))
                 {
                     coverUrl = coverUrl.Replace("http://", "https://");
@@ -129,12 +148,25 @@ public class GoogleBooksLookupService : IBookLookupService
         {
             Title = title,
             Author = author,
-            Isbn = isbn, // Aradığımız ISBN'i atıyoruz (normalize edilmiş hali API'de industryIdentifiers altında bulunabilir)
+            Isbn = isbn,
             CoverImageUrl = coverUrl,
             Description = description,
             PageCount = pageCount,
             PublishedYear = publishedYear,
             Genre = genre
         };
+    }
+
+    // Bozuk/beklenmeyen JSON gelirse bunu "servis bozuk" hatasına çevirir
+    private static JsonDocument ParseOrThrow(string content)
+    {
+        try
+        {
+            return JsonDocument.Parse(content);
+        }
+        catch (JsonException ex)
+        {
+            throw new ExternalServiceUnavailableException(ServiceName, $"{ServiceName} geçersiz bir yanıt döndürdü.", ex);
+        }
     }
 }

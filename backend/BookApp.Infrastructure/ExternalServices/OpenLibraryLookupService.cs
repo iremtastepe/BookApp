@@ -1,11 +1,14 @@
 using System.Text.Json;
 using BookApp.Application.DTOs.External;
+using BookApp.Application.Exceptions;
 using BookApp.Application.Interfaces.ExternalServices;
 
 namespace BookApp.Infrastructure.ExternalServices;
 
 public class OpenLibraryLookupService : IBookLookupService
 {
+    private const string ServiceName = "Open Library";
+
     private readonly IHttpClientFactory _httpClientFactory;
 
     public OpenLibraryLookupService(IHttpClientFactory httpClientFactory)
@@ -16,25 +19,43 @@ public class OpenLibraryLookupService : IBookLookupService
     public async Task<ExternalBookDto?> SearchByIsbnAsync(string isbn)
     {
         var requestUrl = $"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data";
-        var client = _httpClientFactory.CreateClient("OpenLibraryClient");
-        
-        var response = await client.GetAsync(requestUrl);
-        if (!response.IsSuccessStatusCode)
+
+        string content;
+        try
         {
-            return null;
+            var client = _httpClientFactory.CreateClient("OpenLibraryClient");
+            var response = await client.GetAsync(requestUrl);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new ExternalServiceUnavailableException(
+                    ServiceName,
+                    $"{ServiceName} {(int)response.StatusCode} koduyla yanıt verdi.");
+            }
+
+            content = await response.Content.ReadAsStringAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ExternalServiceUnavailableException(ServiceName, $"{ServiceName} servisine ulaşılamadı.", ex);
+        }
+        catch (TaskCanceledException ex)
+        {
+            throw new ExternalServiceUnavailableException(ServiceName, $"{ServiceName} zamanında yanıt vermedi.", ex);
         }
 
-        var content = await response.Content.ReadAsStringAsync();
-        using var jsonDoc = JsonDocument.Parse(content);
+        using var jsonDoc = ParseOrThrow(content);
         var root = jsonDoc.RootElement;
 
         var key = $"ISBN:{isbn}";
         if (!root.TryGetProperty(key, out var bookElement))
         {
-            return null; // Kitap bulunamadı
+            return null; // Kitap gerçekten bulunamadı
         }
 
-        var title = bookElement.TryGetProperty("title", out var titleElement) ? titleElement.GetString() ?? "Bilinmeyen Kitap" : "Bilinmeyen Kitap";
+        var title = bookElement.TryGetProperty("title", out var titleElement)
+            ? titleElement.GetString() ?? "Bilinmeyen Kitap"
+            : "Bilinmeyen Kitap";
 
         var author = "Bilinmeyen Yazar";
         if (bookElement.TryGetProperty("authors", out var authorsElement) && authorsElement.GetArrayLength() > 0)
@@ -78,8 +99,7 @@ public class OpenLibraryLookupService : IBookLookupService
             var pubDateStr = pubDateElement.GetString();
             if (!string.IsNullOrEmpty(pubDateStr))
             {
-                // Open Library genellikle "1988" veya "Oct 1988" gibi değerler döner.
-                // En son 4 haneli rakamı bulmak (yıl)
+                // Open Library genellikle "1988" veya "Oct 1988" gibi değerler döner, 4 haneli rakamı yıl olarak alıyoruz
                 var words = pubDateStr.Split(new[] { ' ', '-', '/' }, StringSplitOptions.RemoveEmptyEntries);
                 foreach (var word in words)
                 {
@@ -101,7 +121,20 @@ public class OpenLibraryLookupService : IBookLookupService
             Description = null, // Open Library jscmd=data genelde uzun açıklama dönmüyor
             PageCount = pageCount,
             PublishedYear = publishedYear,
-            Genre = null // Kategoriler var ama formatlamak Google kadar standart değil, şimdilik null
+            Genre = null
         };
+    }
+
+    // Bozuk/beklenmeyen JSON gelirse bunu "servis bozuk" hatasına çevirir
+    private static JsonDocument ParseOrThrow(string content)
+    {
+        try
+        {
+            return JsonDocument.Parse(content);
+        }
+        catch (JsonException ex)
+        {
+            throw new ExternalServiceUnavailableException(ServiceName, $"{ServiceName} geçersiz bir yanıt döndürdü.", ex);
+        }
     }
 }

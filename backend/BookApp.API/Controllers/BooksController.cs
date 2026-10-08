@@ -1,4 +1,5 @@
 using BookApp.Application.DTOs.Books;
+using BookApp.Application.Exceptions;
 using BookApp.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -45,13 +46,20 @@ public class BooksController : ControllerBase
             var book = await _bookService.FindOrFetchByIsbnAsync(isbn);
             return Ok(book);
         }
-        catch (ArgumentException ex) // DEGISTI: gecersiz ISBN -> 400
+        catch (ArgumentException ex) // geçersiz ISBN -> 400
         {
             return BadRequest(new { message = ex.Message });
         }
-        catch (KeyNotFoundException ex)
+        catch (KeyNotFoundException ex) // iki kaynakta da yok -> 404
         {
             return NotFound(new { message = ex.Message });
+        }
+        catch (ExternalServiceUnavailableException) // dış servisler çalışmıyor -> 503
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                message = "Kitap servisleri şu an yanıt vermiyor, lütfen biraz sonra tekrar deneyin."
+            });
         }
     }
 
@@ -63,7 +71,7 @@ public class BooksController : ControllerBase
             var created = await _bookService.CreateAsync(request);
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
         }
-        catch (ArgumentException ex) // DEGISTI: gecersiz ISBN -> 400
+        catch (ArgumentException ex) // geçersiz ISBN -> 400
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -81,7 +89,7 @@ public class BooksController : ControllerBase
             var updated = await _bookService.UpdateAsync(id, request);
             return updated is null ? NotFound() : Ok(updated);
         }
-        catch (ArgumentException ex) // DEGISTI: gecersiz ISBN -> 400
+        catch (ArgumentException ex) // geçersiz ISBN -> 400
         {
             return BadRequest(new { message = ex.Message });
         }
