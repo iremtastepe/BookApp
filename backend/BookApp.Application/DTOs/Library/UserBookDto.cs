@@ -13,8 +13,12 @@ public class UserBookDto
     public bool IsFavorite { get; set; }
     public decimal? Rating { get; set; }
     public string? Review { get; set; }
+    public int? CurrentPage { get; set; }           // null: ilerleme girilmemiş, 0: henüz ilerlememiş
+    public double? ProgressPercentage { get; set; } // null: hesaplanamıyor (toplam sayfa bilinmiyor veya ilerleme girilmemiş)
     public DateTime? StartedAt { get; set; }
     public DateTime? FinishedAt { get; set; }
     public DateTime AddedAt { get; set; }
     public DateTime? DidNotFinishAt { get; set; }
+    public int? PageCount { get; set; }
+
 }

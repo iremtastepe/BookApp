@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using BookApp.Application.DTOs.Books;
 using BookApp.Application.DTOs.Library;
 using BookApp.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -39,11 +40,20 @@ public class LibraryController : ControllerBase
         }
     }
 
+    // [FromQuery] şart: [ApiController] varsayılan olarak karmaşık sınıfları gövdeden (body) okumaya çalışır.
+    // Bu işaret "LibraryQuery'nin alanlarını URL'deki ?search=...&status=... parametrelerinden doldur" der.
     [HttpGet]
-    public async Task<ActionResult<List<UserBookDto>>> GetLibrary()
+    public async Task<ActionResult<PagedResponse<UserBookDto>>> GetLibrary([FromQuery] LibraryQuery query)
     {
-        var result = await _userBookService.GetLibraryAsync(GetUserId());
-        return Ok(result);
+        try
+        {
+            var result = await _userBookService.GetLibraryAsync(GetUserId(), query);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPut("{id}/status")]
@@ -57,6 +67,28 @@ public class LibraryController : ControllerBase
         catch (KeyNotFoundException ex)
         {
             return NotFound(new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPut("{id}/progress")]
+    public async Task<ActionResult<UserBookDto>> UpdateProgress(int id, UpdateProgressRequest request)
+    {
+        try
+        {
+            var result = await _userBookService.UpdateProgressAsync(GetUserId(), id, request);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
     }
 
@@ -89,6 +121,12 @@ public class LibraryController : ControllerBase
         catch (KeyNotFoundException ex)
         {
             return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Servis "Read olmayan kitap favoriye eklenemez" kuralını bu hatayla bildirir (409).
+            // Bu yakalama olmadan hata yakalanmaz ve 500 dönerdi
+            return Conflict(new { message = ex.Message });
         }
     }
 }

@@ -32,15 +32,25 @@ public class UserBook
     // nullable çünkü kullanıcı yorum yazmamış olabilir
     public string? Review { get; set; }
 
-    // Kullanıcının bu kitabı okumaya başladığı tarih, Status "Reading" olunca otomatik set ediliyor
+    // Kullanıcının bu kitapta şu an kaçıncı sayfada olduğu (isteğe bağlı ilerleme kaydı)
+    // int? (nullable) çünkü sayfa takibi zorunlu değil ve iki farklı durumu ayırmamız gerekiyor:
+    //   null -> kullanıcı ilerleme bilgisi hiç girmemiş
+    //   0    -> kullanıcı ilerleme bilgisi girmiş ama henüz ilk sayfayı geçmemiş
+    // Okuma durumundan (Status) bağımsızdır: bir durumu seçmek için sayfa girmek gerekmez,
+    // sayfa girmek de (bazı koşullar dışında) durumu zorla değiştirmez
+    public int? CurrentPage { get; set; }
+
+      // Kullanıcının bu kitabı okumaya başladığı tarih. Status "Reading" olunca boşsa set edilir,
+    // doluysa değişmez; başka bir duruma geçilse bile silinmez (geçmiş başlangıç bilgisi)
     public DateTime? StartedAt { get; set; }
 
-    // Kullanıcının bu kitabı bitirdiği tarih, Status "Read" olunca otomatik set ediliyor
+    // Kullanıcının bu kitabı bitirdiği tarih. Status "Read" olunca boşsa set edilir;
+    // Status "Read" dışına çıkınca temizlenir, tekrar "Read" olunca yeni tarih oluşur
     public DateTime? FinishedAt { get; set; }
 
-    // Kullanıcının bu kitabı yarıda bıraktığı tarih, Status "DidNotFinish" olunca otomatik set ediliyor
+    // Kullanıcının bu kitabı yarıda bıraktığı tarih. Status "DidNotFinish" olunca boşsa set edilir;
+    // Status "DidNotFinish" dışına çıkınca temizlenir
     public DateTime? DidNotFinishAt { get; set; }
-
     // Bu kitabın kullanıcının kitaplığına eklendiği tarih
     public DateTime AddedAt { get; set; } = DateTime.UtcNow;
 
