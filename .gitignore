@@ -35,8 +35,18 @@ wwwroot/lib/
 # Logs
 *.log
 
-# Database files
+# Database files & backups
 *.db
 *.db-shm
 *.db-wal
+*.dump
+*.backup
+*.sql
+*.bak
+
+# Configuration & Secrets
 appsettings.json
+appsettings.*.local.json
+.env
+.env.*
+!.env.example

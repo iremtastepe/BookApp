@@ -109,4 +109,34 @@ public class UserBookRepository : IUserBookRepository
         _context.UserBooks.Update(userBook);
         return _context.SaveChangesAsync();
     }
+
+    public Task<int> GetReadBooksCountByYearAsync(int userId, int year)
+        => _context.UserBooks
+            .Where(ub => ub.UserId == userId && ub.Status == BookApp.Domain.Enums.ReadingStatus.Read && ub.FinishedYear == year)
+            .CountAsync();
+
+    public Task<int> GetTotalReadBooksCountAsync(int userId)
+        => _context.UserBooks
+            .Where(ub => ub.UserId == userId && ub.Status == BookApp.Domain.Enums.ReadingStatus.Read)
+            .CountAsync();
+
+    public async Task<(List<UserBook> Items, int TotalCount)> GetMonthlyReadBooksPagedAsync(int userId, int year, int month, int page, int pageSize)
+    {
+        var query = _context.UserBooks
+            .AsNoTracking()
+            .Include(ub => ub.Book)
+            .Where(ub => ub.UserId == userId && ub.Status == BookApp.Domain.Enums.ReadingStatus.Read && ub.FinishedYear == year && ub.FinishedMonth == month);
+
+        var total = await query.CountAsync();
+
+        var items = await query
+            .OrderBy(ub => ub.FinishedDay == null) // günü olanlar önce gelsin (false < true)
+            .ThenByDescending(ub => ub.FinishedDay)
+            .ThenByDescending(ub => ub.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (items, total);
+    }
 }

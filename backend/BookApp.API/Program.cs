@@ -67,8 +67,10 @@ builder.Services.AddControllers();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IBookRepository, BookRepository>();
 builder.Services.AddScoped<IBookService, BookService>();
-builder.Services.AddScoped<IUserBookRepository, UserBookRepository>();   // YENİ
-builder.Services.AddScoped<IUserBookService, UserBookService>();          // YENİ
+builder.Services.AddScoped<IUserBookRepository, UserBookRepository>();
+builder.Services.AddScoped<IUserBookService, UserBookService>();
+builder.Services.AddScoped<IReadingGoalRepository, ReadingGoalRepository>(); // Yıllık hedefler repository
+builder.Services.AddScoped<IReadingGoalService, ReadingGoalService>();       // Yıllık hedefler ve aylık okuma servisi
 
 // Altyapı (Infrastructure) servislerimizi kaydediyoruz (İşçiler ve Şef)
 builder.Services.AddInfrastructureServices();

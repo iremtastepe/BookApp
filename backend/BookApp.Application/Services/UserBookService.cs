@@ -1,5 +1,6 @@
 using BookApp.Application.DTOs.Books;
 using BookApp.Application.DTOs.Library;
+using BookApp.Application.Helpers;
 using BookApp.Application.Interfaces;
 using BookApp.Domain.Entities;
 using BookApp.Domain.Enums;
@@ -78,21 +79,63 @@ public class UserBookService : IUserBookService
     {
         // JSON'dan gelen bir sayı (örn. 99), enum'da tanımlı olmasa bile hata vermeden Status'a aktarılabilir.
         // Bu yüzden değerin gerçekten ReadingStatus'ün üyelerinden biri olduğunu burada doğrularız.
-        // Bu kontrol veritabanına gitmeden önce yapılır: geçersiz istek için boşuna sorgu atmayız.
         if (!Enum.IsDefined(request.Status))
         {
-            // Geçerli değerleri enum'dan türetiyoruz, böylece enum'a yeni üye eklenirse mesaj bayatlamaz
             var validValues = string.Join(", ", Enum.GetValues<ReadingStatus>().Select(s => $"{(int)s} ({s})"));
             throw new ArgumentException($"Geçersiz okuma durumu. Geçerli değerler: {validValues}.");  // 400
         }
 
-        // Kayıt hem id hem userId ile aranır: başkasının kaydı bulunamaz, dışarıdan "yok" ile aynı görünür
+        // Kayıt hem id hem userId ile aranır: başkasının kaydı bulunamaz, dışarıdan "yok" ile aynı görünür (404)
         var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
         if (userBook is null)
             throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");  // 404
 
-        // Durum ve tarih kuralları tek bir yerde (ApplyStatusChange) tutulur
-        ApplyStatusChange(userBook, request.Status);
+        // Read dışındaki bir duruma geçiliyorsa tarih parametresi kabul edilmez
+        if (request.Status != ReadingStatus.Read)
+        {
+            if (request.FinishedDate is not null || request.FinishedDateUnknown == true)
+                throw new ArgumentException("Bitiş tarihi yalnızca 'Okundu' (Read) durumu için belirtilebilir.");
+
+            ApplyStatusChange(userBook, request.Status);
+        }
+        else
+        {
+            // Çelişen tarih parametreleri kontrolü: her durumda (zaten Read olsa bile) reddedilir
+            var hasFinishedDate = request.FinishedDate is not null;
+            var isUnknown = request.FinishedDateUnknown == true;
+
+            if (hasFinishedDate && isUnknown)
+                throw new ArgumentException("finishedDate ve finishedDateUnknown aynı anda belirtilemez.");
+
+            // Kitap zaten Read durumundaysa: durumun tekrar Read gönderilmesi mevcut bitiş tarihini DEĞİŞTİRMEZ veya TEMİZLEMEZ.
+            // Tarih değişikliği için finished-date endpoint'i kullanılmalıdır.
+            if (userBook.Status == ReadingStatus.Read)
+            {
+                // Mevcut tarih korunur, hiçbir alan ezilmez
+            }
+            else
+            {
+                // Kitap ilk kez Read durumuna geçiriliyorsa: seçeneklerden tam olarak biri zorunludur
+                if (!hasFinishedDate && !isUnknown)
+                    throw new ArgumentException("Okundu durumuna geçerken bitiş tarihi (finishedDate) veya bilinmiyor seçeneği (finishedDateUnknown: true) belirtilmelidir.");
+
+                ApplyStatusChange(userBook, ReadingStatus.Read);
+
+                if (isUnknown)
+                {
+                    userBook.FinishedYear = null;
+                    userBook.FinishedMonth = null;
+                    userBook.FinishedDay = null;
+                }
+                else
+                {
+                    DateValidator.ValidateCompletionDate(request.FinishedDate);
+                    userBook.FinishedYear = request.FinishedDate!.Year;
+                    userBook.FinishedMonth = request.FinishedDate.Month;
+                    userBook.FinishedDay = request.FinishedDate.Day;
+                }
+            }
+        }
 
         await _userBookRepository.UpdateAsync(userBook);
 
@@ -101,7 +144,6 @@ public class UserBookService : IUserBookService
 
     public async Task<UserBookDto> UpdateProgressAsync(int userId, int userBookId, UpdateProgressRequest request)
     {
-        // Kayıt hem id hem userId ile aranır: başkasının kaydı bulunamaz, dışarıdan "yok" ile aynı görünür
         var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
         if (userBook is null)
             throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");  // 404
@@ -119,33 +161,79 @@ public class UserBookService : IUserBookService
         if (newPage < 0)
             throw new ArgumentException("Sayfa numarası negatif olamaz.");  // 400
 
-        // PageCount null veya 0 ise toplam sayfa bilinmiyor/geçersiz sayılır:
-        // üst sınır kontrolü yapılamaz, ilerleme yine de girilebilir
         var totalPages = userBook.Book.PageCount;
         var isTotalPagesKnown = totalPages is > 0;
 
         if (isTotalPagesKnown && newPage > totalPages)
             throw new ArgumentException($"Sayfa numarası kitabın toplam sayfa sayısını ({totalPages}) aşamaz.");  // 400
 
-        // Eski değer, yenisini kaydetmeden ÖNCE alınmalı; ilerleme gerçekten arttı mı diye karşılaştıracağız.
-        // CurrentPage null ise (hiç girilmemiş) 0 kabul edilir
         var previousPage = userBook.CurrentPage ?? 0;
         userBook.CurrentPage = newPage;
 
-        // Otomatik durum geçişleri SADECE sayfa gerçekten ilerlediyse yapılır:
-        // aynı sayfayı tekrar kaydetmek veya sayfayı geri çekmek durumu değiştirmez.
-        // (Kullanıcının manuel seçtiği durum bu yüzden otomatik olarak ezilmez.)
+        // Otomatik durum geçişleri SADECE sayfa gerçekten ilerlediyse yapılır
         if (newPage > previousPage)
         {
-            // Henüz okunmaya başlanmamış kitapta 0'dan büyük sayfaya ilerlemek, okumanın başladığı anlamına gelir.
-            // DidNotFinish ve Read bu koşula girmez: onlar otomatik olarak değişmez
             if (userBook.Status is ReadingStatus.NotStarted or ReadingStatus.NextUp)
                 ApplyStatusChange(userBook, ReadingStatus.Reading);
 
-            // Toplam sayfa biliniyorsa ve son sayfaya ulaşıldıysa kitap bitmiştir.
-            // Toplam sayfa bilinmiyorsa son sayfanın hangisi olduğunu bilemeyiz, otomatik Read yapılmaz
+            // Kitap henüz Reading durumundaysa ve son sayfaya ulaşıldıysa otomatik Read yapılır.
+            // ÖNEMLİ: Kitap zaten Read durumundaysa tekrar son sayfa girilse bile mevcut bitiş tarihi korunur (ezilmez).
             if (userBook.Status == ReadingStatus.Reading && isTotalPagesKnown && newPage == totalPages)
+            {
                 ApplyStatusChange(userBook, ReadingStatus.Read);
+
+                if (request.LocalDate is not null)
+                {
+                    DateValidator.ValidateCompletionDate(request.LocalDate);
+                    userBook.FinishedYear = request.LocalDate.Year;
+                    userBook.FinishedMonth = request.LocalDate.Month;
+                    userBook.FinishedDay = request.LocalDate.Day;
+                }
+                else
+                {
+                    var utcNow = DateTime.UtcNow;
+                    userBook.FinishedYear = utcNow.Year;
+                    userBook.FinishedMonth = utcNow.Month;
+                    userBook.FinishedDay = utcNow.Day;
+                }
+            }
+        }
+
+        await _userBookRepository.UpdateAsync(userBook);
+
+        return MapToDto(userBook);
+    }
+
+    public async Task<UserBookDto> UpdateFinishedDateAsync(int userId, int userBookId, UpdateFinishedDateRequest request)
+    {
+        var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
+        if (userBook is null)
+            throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");  // 404
+
+        if (userBook.Status != ReadingStatus.Read)
+            throw new InvalidOperationException("Yalnızca 'Okundu' (Read) durumundaki kitapların bitiş tarihi güncellenebilir.");  // 400
+
+        var hasFinishedDate = request.FinishedDate is not null;
+        var isUnknown = request.FinishedDateUnknown == true;
+
+        if (hasFinishedDate && isUnknown)
+            throw new ArgumentException("finishedDate ve finishedDateUnknown aynı anda belirtilemez.");
+
+        if (!hasFinishedDate && !isUnknown)
+            throw new ArgumentException("Bitiş tarihi (finishedDate) veya bilinmiyor seçeneği (finishedDateUnknown: true) belirtilmelidir.");
+
+        if (isUnknown)
+        {
+            userBook.FinishedYear = null;
+            userBook.FinishedMonth = null;
+            userBook.FinishedDay = null;
+        }
+        else
+        {
+            DateValidator.ValidateCompletionDate(request.FinishedDate);
+            userBook.FinishedYear = request.FinishedDate!.Year;
+            userBook.FinishedMonth = request.FinishedDate.Month;
+            userBook.FinishedDay = request.FinishedDate.Day;
         }
 
         await _userBookRepository.UpdateAsync(userBook);
@@ -197,7 +285,9 @@ public class UserBookService : IUserBookService
         // Bitirme tarihi ve favori sadece "Read" durumuna aittir: kitap Read değilse ikisi de temizlenir
         if (newStatus != ReadingStatus.Read)
         {
-            userBook.FinishedAt = null;
+            userBook.FinishedYear = null;
+            userBook.FinishedMonth = null;
+            userBook.FinishedDay = null;
             userBook.IsFavorite = false;
         }
 
@@ -214,7 +304,8 @@ public class UserBookService : IUserBookService
                 userBook.StartedAt ??= now;
                 break;
             case ReadingStatus.Read:
-                userBook.FinishedAt ??= now;
+                // Manuel veya otomatik tamamlanma tarih ataması ilgili özel metotlarda yönetilir.
+                // Burada otomatik varsayılan tarih ATANMAZ.
                 break;
             case ReadingStatus.DidNotFinish:
                 userBook.DidNotFinishAt ??= now;
@@ -237,7 +328,9 @@ public class UserBookService : IUserBookService
         PageCount = userBook.Book.PageCount,
         ProgressPercentage = CalculateProgressPercentage(userBook),
         StartedAt = userBook.StartedAt,
-        FinishedAt = userBook.FinishedAt,
+        FinishedYear = userBook.FinishedYear,
+        FinishedMonth = userBook.FinishedMonth,
+        FinishedDay = userBook.FinishedDay,
         DidNotFinishAt = userBook.DidNotFinishAt,
         AddedAt = userBook.AddedAt
     };

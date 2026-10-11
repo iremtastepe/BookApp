@@ -14,6 +14,7 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
     public DbSet<Book> Books => Set<Book>();
     public DbSet<Note> Notes => Set<Note>();
     public DbSet<UserBook> UserBooks => Set<UserBook>();
+    public DbSet<ReadingGoal> ReadingGoals => Set<ReadingGoal>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

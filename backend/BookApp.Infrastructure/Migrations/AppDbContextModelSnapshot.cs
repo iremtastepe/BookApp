@@ -89,6 +89,42 @@ namespace BookApp.Infrastructure.Migrations
                     b.ToTable("Notes");
                 });
 
+            modelBuilder.Entity("BookApp.Domain.Entities.ReadingGoal", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("TargetBooks")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Year")
+                        .IsUnique();
+
+                    b.ToTable("ReadingGoals", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ReadingGoals_TargetBooks_Positive", "\"TargetBooks\" > 0");
+
+                            t.HasCheckConstraint("CK_ReadingGoals_Year_Range", "\"Year\" >= 1 AND \"Year\" <= 9999");
+                        });
+                });
+
             modelBuilder.Entity("BookApp.Domain.Entities.User", b =>
                 {
                     b.Property<int>("Id")
@@ -179,8 +215,14 @@ namespace BookApp.Infrastructure.Migrations
                     b.Property<DateTime?>("DidNotFinishAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime?>("FinishedAt")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<int?>("FinishedDay")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("FinishedMonth")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("FinishedYear")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("IsFavorite")
                         .HasColumnType("boolean");
@@ -208,7 +250,20 @@ namespace BookApp.Infrastructure.Migrations
                     b.HasIndex("UserId", "BookId")
                         .IsUnique();
 
-                    b.ToTable("UserBooks");
+                    b.HasIndex("UserId", "Status", "FinishedYear");
+
+                    b.HasIndex("UserId", "Status", "FinishedYear", "FinishedMonth");
+
+                    b.ToTable("UserBooks", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_UserBooks_FinishedDate_Hierarchy", "(\"FinishedYear\" IS NULL AND \"FinishedMonth\" IS NULL AND \"FinishedDay\" IS NULL) OR (\"FinishedYear\" IS NOT NULL AND \"FinishedMonth\" IS NULL AND \"FinishedDay\" IS NULL) OR (\"FinishedYear\" IS NOT NULL AND \"FinishedMonth\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_UserBooks_FinishedDay_CalendarValid", "\"FinishedDay\" IS NULL OR (\"FinishedDay\" >= 1 AND ((\"FinishedMonth\" IN (1, 3, 5, 7, 8, 10, 12) AND \"FinishedDay\" <= 31) OR (\"FinishedMonth\" IN (4, 6, 9, 11) AND \"FinishedDay\" <= 30) OR (\"FinishedMonth\" = 2 AND ((((\"FinishedYear\" % 4 = 0 AND \"FinishedYear\" % 100 <> 0) OR (\"FinishedYear\" % 400 = 0)) AND \"FinishedDay\" <= 29) OR ((NOT ((\"FinishedYear\" % 4 = 0 AND \"FinishedYear\" % 100 <> 0) OR (\"FinishedYear\" % 400 = 0))) AND \"FinishedDay\" <= 28)))))");
+
+                            t.HasCheckConstraint("CK_UserBooks_FinishedMonth_Range", "\"FinishedMonth\" IS NULL OR (\"FinishedMonth\" >= 1 AND \"FinishedMonth\" <= 12)");
+
+                            t.HasCheckConstraint("CK_UserBooks_FinishedYear_Range", "\"FinishedYear\" IS NULL OR (\"FinishedYear\" >= 1 AND \"FinishedYear\" <= 9999)");
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<int>", b =>
@@ -354,6 +409,17 @@ namespace BookApp.Infrastructure.Migrations
                     b.Navigation("UserBook");
                 });
 
+            modelBuilder.Entity("BookApp.Domain.Entities.ReadingGoal", b =>
+                {
+                    b.HasOne("BookApp.Domain.Entities.User", "User")
+                        .WithMany("ReadingGoals")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("BookApp.Domain.Entities.UserBook", b =>
                 {
                     b.HasOne("BookApp.Domain.Entities.Book", "Book")
@@ -431,6 +497,8 @@ namespace BookApp.Infrastructure.Migrations
 
             modelBuilder.Entity("BookApp.Domain.Entities.User", b =>
                 {
+                    b.Navigation("ReadingGoals");
+
                     b.Navigation("UserBooks");
                 });
 

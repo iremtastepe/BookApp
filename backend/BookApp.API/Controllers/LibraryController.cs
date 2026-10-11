@@ -129,4 +129,30 @@ public class LibraryController : ControllerBase
             return Conflict(new { message = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Yalnızca "Okundu" durumundaki bir kitabın bitiş tarihini sonradan düzeltir, ekler veya bilinmiyor yapar.
+    /// PUT /api/Library/5/finished-date
+    /// </summary>
+    [HttpPut("{id}/finished-date")]
+    public async Task<ActionResult<UserBookDto>> UpdateFinishedDate(int id, UpdateFinishedDateRequest request)
+    {
+        try
+        {
+            var result = await _userBookService.UpdateFinishedDateAsync(GetUserId(), id, request);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message }); // Başkasına ait veya bulunamayan kayıt: 404
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message }); // Geçersiz tarih kuralları veya çelişkili seçenekler: 400
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message }); // Read durumunda olmayan kitap: 400
+        }
+    }
 }

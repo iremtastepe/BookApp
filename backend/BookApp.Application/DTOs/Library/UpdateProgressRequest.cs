@@ -12,4 +12,8 @@ public class UpdateProgressRequest
     // Book'ta olduğu için burada, tek başına bu sınıfta kontrol edilemez).
     [JsonRequired]
     public int? CurrentPage { get; set; }
+
+    // Son sayfaya ulaşıldığında otomatik "Read" durumu için opsiyonel yerel tarih.
+    // Gönderilmezse sunucu UTC takvim tarihi kullanılır.
+    public CompletionDateDto? LocalDate { get; set; }
 }

@@ -16,7 +16,13 @@ public class UserBookDto
     public int? CurrentPage { get; set; }           // null: ilerleme girilmemiş, 0: henüz ilerlememiş
     public double? ProgressPercentage { get; set; } // null: hesaplanamıyor (toplam sayfa bilinmiyor veya ilerleme girilmemiş)
     public DateTime? StartedAt { get; set; }
-    public DateTime? FinishedAt { get; set; }
+    public int? FinishedYear { get; set; }
+    public int? FinishedMonth { get; set; }
+    public int? FinishedDay { get; set; }
+    // Tam tarih (gün, ay, yıl) biliniyorsa hesaplanan tarih; bilinmiyorsa null (asla sahte gün üretilmez)
+    public DateOnly? FinishedDate => (FinishedYear.HasValue && FinishedMonth.HasValue && FinishedDay.HasValue)
+        ? new DateOnly(FinishedYear.Value, FinishedMonth.Value, FinishedDay.Value)
+        : null;
     public DateTime AddedAt { get; set; }
     public DateTime? DidNotFinishAt { get; set; }
     public int? PageCount { get; set; }

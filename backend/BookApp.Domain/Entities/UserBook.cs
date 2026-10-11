@@ -44,9 +44,15 @@ public class UserBook
     // doluysa değişmez; başka bir duruma geçilse bile silinmez (geçmiş başlangıç bilgisi)
     public DateTime? StartedAt { get; set; }
 
-    // Kullanıcının bu kitabı bitirdiği tarih. Status "Read" olunca boşsa set edilir;
-    // Status "Read" dışına çıkınca temizlenir, tekrar "Read" olunca yeni tarih oluşur
-    public DateTime? FinishedAt { get; set; }
+    // Kullanıcının bu kitabı bitirdiği takvim yılı, ayı ve günü (Single Source of Truth).
+    // Yalnızca Status "Read" olan kitaplarda anlamlıdır. Kısmi tarihleri destekler:
+    //   - Yalnızca yıl: FinishedYear dolu, diğerleri null
+    //   - Ay ve yıl: FinishedYear ve FinishedMonth dolu, FinishedDay null
+    //   - Tam tarih: üçü de dolu
+    //   - Tarih bilinmiyor: üçü de null
+    public int? FinishedYear { get; set; }
+    public int? FinishedMonth { get; set; }
+    public int? FinishedDay { get; set; }
 
     // Kullanıcının bu kitabı yarıda bıraktığı tarih. Status "DidNotFinish" olunca boşsa set edilir;
     // Status "DidNotFinish" dışına çıkınca temizlenir
