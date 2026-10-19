@@ -4,9 +4,35 @@ namespace BookApp.Application.Helpers;
 
 /// <summary>
 /// Tamamlanma tarihlerinin geçerliliğini ve takvim kurallarını denetleyen yardımcı sınıf.
+/// Ayrıca yıl/ay aralığı kuralını (hedefler, istatistikler, bitirme tarihi) tek yerde tutar.
 /// </summary>
 public static class DateValidator
 {
+    // Uygulamada kabul edilen en küçük yıl (hedef, istatistik ve bitirme tarihi için ortak)
+    public const int MinYear = 2000;
+
+    // Kabul edilen en büyük yıl: içinde bulunulan yıl + 1 (gelecek yıl için hedef planlanabilir)
+    public static int MaxYear => DateTime.UtcNow.Year + 1;
+
+    /// <summary>
+    /// Yıl, MinYear ile MaxYear (dahil) arasında olmalıdır. Aksi halde ArgumentException (400) fırlatır.
+    /// Hedefler (PUT/GET) ve istatistik sorguları bu metodu kullanır.
+    /// </summary>
+    public static void ValidateYearRange(int year)
+    {
+        if (year < MinYear || year > MaxYear)
+            throw new ArgumentException($"Yıl {MinYear} ile {MaxYear} arasında olmalıdır.");
+    }
+
+    /// <summary>
+    /// Ay 1 ile 12 arasında olmalıdır. Aksi halde ArgumentException (400) fırlatır.
+    /// </summary>
+    public static void ValidateMonth(int month)
+    {
+        if (month < 1 || month > 12)
+            throw new ArgumentException("Ay 1 ile 12 arasında olmalıdır.");
+    }
+
     /// <summary>
     /// Gelen tarih nesnesini (tam tarih, ay-yıl veya sadece yıl) doğrular.
     /// Hata varsa ArgumentException fırlatır.
@@ -35,9 +61,13 @@ public static class DateValidator
 
         var year = date.Year!.Value;
 
-        // Yıl geçerlilik aralığı (1 - 9999)
-        if (year < 1 || year > 9999)
-            throw new ArgumentException("Yıl 1 ile 9999 arasında olmalıdır.");
+        // Alt sınır: hedef ve istatistiklerle aynı kural (MinYear)
+        if (year < MinYear)
+            throw new ArgumentException($"Yıl {MinYear} veya daha büyük olmalıdır.");
+
+        // Teknik güvenlik: 9999'dan büyük yıllar DateTime ile hesaplanamaz; zaten gelecek tarihtir
+        if (year > 9999)
+            throw new ArgumentException("Gelecekteki bir yıl tamamlanma yılı olarak girilemez.");
 
         // Yerel saat dilimi toleransı: Sunucu UTC takvim tarihinden en fazla 1 gün ilerisi kabul edilir
         var maxCalendarDate = DateTime.UtcNow.Date.AddDays(1);
@@ -55,8 +85,7 @@ public static class DateValidator
 
         // 2. Yıl ve Ay kontrolleri
         var month = date.Month!.Value;
-        if (month < 1 || month > 12)
-            throw new ArgumentException("Ay 1 ile 12 arasında olmalıdır.");
+        ValidateMonth(month);
 
         if (!hasDay)
         {

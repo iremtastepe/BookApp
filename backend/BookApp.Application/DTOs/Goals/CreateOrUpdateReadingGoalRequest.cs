@@ -1,9 +1,8 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace BookApp.Application.DTOs.Goals;
 
 public class CreateOrUpdateReadingGoalRequest
 {
-    [Range(1, int.MaxValue, ErrorMessage = "Hedef kitap sayısı 1 veya daha büyük olmalıdır.")]
+    // Sınır kontrolü (1-1000) bir iş kuralıdır; tek kaynak ReadingGoalService.ValidateTargetBooks'tur.
+    // Alan hiç gönderilmezse 0 olur ve servis tarafından 400 ile reddedilir.
     public int TargetBooks { get; set; }
 }

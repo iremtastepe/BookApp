@@ -1,5 +1,6 @@
 using System.Globalization;
 using BookApp.Application.DTOs.Statistics;
+using BookApp.Application.Helpers;
 using BookApp.Application.Interfaces;
 using BookApp.Domain.Enums;
 
@@ -52,8 +53,9 @@ public class StatisticsService : IStatisticsService
 
     public async Task<MonthlyStatisticsDto> GetMonthlyAsync(int userId, int year, int month)
     {
-        ValidateYear(year);
-        ValidateMonth(month);
+        // Ortak yıl/ay kuralları (DateValidator): geçersizse ArgumentException -> controller 400 döner
+        DateValidator.ValidateYearRange(year);
+        DateValidator.ValidateMonth(month);
 
         var completedCount = await _statisticsRepository.GetReadCountAsync(userId, year, month);
         var authorCounts = await _statisticsRepository.GetReadAuthorCountsAsync(userId, year, month);
@@ -87,7 +89,8 @@ public class StatisticsService : IStatisticsService
 
     public async Task<YearlyStatisticsDto> GetYearlyAsync(int userId, int year)
     {
-        ValidateYear(year);
+        // Ortak yıl kuralı (DateValidator): geçersizse ArgumentException -> controller 400 döner
+        DateValidator.ValidateYearRange(year);
 
         var yearCounts = await _statisticsRepository.GetReadCountsByYearAsync(userId);
         var monthCounts = await _statisticsRepository.GetReadCountsByMonthAsync(userId, year);
@@ -111,18 +114,6 @@ public class StatisticsService : IStatisticsService
     }
 
     // ---- Yardımcı metotlar ----
-
-    private static void ValidateYear(int year)
-    {
-        if (year < 1 || year > 9999)
-            throw new ArgumentException("Yıl 1 ile 9999 arasında olmalıdır.");  // 400
-    }
-
-    private static void ValidateMonth(int month)
-    {
-        if (month < 1 || month > 12)
-            throw new ArgumentException("Ay 1 ile 12 arasında olmalıdır.");  // 400
-    }
 
     // Veritabanı yalnızca kitabı olan durumları döndürür; 5 durumun hepsini 0'larla tamamlarız
     private static List<StatusCountDto> BuildStatusCounts(Dictionary<ReadingStatus, int> counts)

@@ -1,4 +1,5 @@
 using BookApp.Application.DTOs.Goals;
+using BookApp.Application.Helpers;
 using BookApp.Application.Interfaces;
 using BookApp.Domain.Entities;
 
@@ -6,6 +7,10 @@ namespace BookApp.Application.Services;
 
 public class ReadingGoalService : IReadingGoalService
 {
+    // Yıllık kitap hedefi için kabul edilen aralık
+    private const int MinTargetBooks = 1;
+    private const int MaxTargetBooks = 1000;
+
     private readonly IReadingGoalRepository _readingGoalRepository;
     private readonly IUserBookRepository _userBookRepository;
 
@@ -19,11 +24,8 @@ public class ReadingGoalService : IReadingGoalService
 
     public async Task<AnnualReadingGoalDto> CreateOrUpdateGoalAsync(int userId, int year, CreateOrUpdateReadingGoalRequest request)
     {
-        if (year < 1 || year > 9999)
-            throw new ArgumentException("Yıl 1 ile 9999 arasında olmalıdır.");
-
-        if (request.TargetBooks <= 0)
-            throw new ArgumentException("Hedef kitap sayısı 0'dan büyük olmalıdır.");
+        DateValidator.ValidateYearRange(year);
+        ValidateTargetBooks(request.TargetBooks);
 
         var existingGoal = await _readingGoalRepository.GetByUserAndYearAsync(userId, year);
         if (existingGoal is not null)
@@ -49,8 +51,7 @@ public class ReadingGoalService : IReadingGoalService
 
     public async Task<AnnualReadingGoalDto> GetAnnualGoalAsync(int userId, int year)
     {
-        if (year < 1 || year > 9999)
-            throw new ArgumentException("Yıl 1 ile 9999 arasında olmalıdır.");
+        DateValidator.ValidateYearRange(year);
 
         var goal = await _readingGoalRepository.GetByUserAndYearAsync(userId, year);
 
@@ -59,11 +60,8 @@ public class ReadingGoalService : IReadingGoalService
 
     public async Task<MonthlyReadSummaryDto> GetMonthlySummaryAsync(int userId, int year, int month, int page, int pageSize)
     {
-        if (year < 1 || year > 9999)
-            throw new ArgumentException("Yıl 1 ile 9999 arasında olmalıdır.");
-
-        if (month < 1 || month > 12)
-            throw new ArgumentException("Ay 1 ile 12 arasında olmalıdır.");
+        DateValidator.ValidateYearRange(year);
+        DateValidator.ValidateMonth(month);
 
         if (page < 1)
             throw new ArgumentException("page 1 veya daha büyük olmalıdır.");
@@ -94,6 +92,13 @@ public class ReadingGoalService : IReadingGoalService
                 Review = ub.Review
             }).ToList()
         };
+    }
+
+    // Hedef kitap sayısı iş kuralı burada kontrol edilir (DTO'da [Range] yok: tek kaynak bu metot)
+    private static void ValidateTargetBooks(int targetBooks)
+    {
+        if (targetBooks < MinTargetBooks || targetBooks > MaxTargetBooks)
+            throw new ArgumentException($"Hedef kitap sayısı {MinTargetBooks} ile {MaxTargetBooks} arasında olmalıdır.");
     }
 
     private async Task<AnnualReadingGoalDto> BuildAnnualGoalDtoAsync(int userId, int year, int? targetBooks)

@@ -592,4 +592,168 @@ public class ReadingGoalsAndDatesTests
         Assert.Equal(40, goalRepo.Goals[0].TargetBooks);
         Assert.NotNull(goalRepo.Goals[0].UpdatedAt);
     }
+
+    // --- 4. Yıl / Ay / Hedef Sınır Değeri Testleri ---
+    // Sınırlar sabit yıl yerine şu anki yıldan hesaplanır: yıl değişince testler bozulmaz.
+    private static int CurrentYear => DateTime.UtcNow.Year;
+
+    [Fact]
+    public void DateValidator_ValidateYearRange_BoundaryValues()
+    {
+        // Geçerli sınırlar: 2000 ve (bu yıl + 1) dahil
+        DateValidator.ValidateYearRange(2000);
+        DateValidator.ValidateYearRange(CurrentYear);
+        DateValidator.ValidateYearRange(CurrentYear + 1);
+
+        // Sınırın hemen dışı ve saçma değerler
+        Assert.Throws<ArgumentException>(() => DateValidator.ValidateYearRange(1999));
+        Assert.Throws<ArgumentException>(() => DateValidator.ValidateYearRange(CurrentYear + 2));
+        Assert.Throws<ArgumentException>(() => DateValidator.ValidateYearRange(1800));
+        Assert.Throws<ArgumentException>(() => DateValidator.ValidateYearRange(3000));
+        Assert.Throws<ArgumentException>(() => DateValidator.ValidateYearRange(0));
+        Assert.Throws<ArgumentException>(() => DateValidator.ValidateYearRange(-1));
+    }
+
+    [Fact]
+    public void DateValidator_ValidateMonth_BoundaryValues()
+    {
+        DateValidator.ValidateMonth(1);
+        DateValidator.ValidateMonth(12);
+
+        Assert.Throws<ArgumentException>(() => DateValidator.ValidateMonth(0));
+        Assert.Throws<ArgumentException>(() => DateValidator.ValidateMonth(13));
+        Assert.Throws<ArgumentException>(() => DateValidator.ValidateMonth(-1));
+    }
+
+    [Fact]
+    public void DateValidator_CompletionDate_BeforeMinYear_ShouldThrow_AndMinYearBoundaryPasses()
+    {
+        // 2000 öncesi bitirme tarihi reddedilir (yıl, yıl+ay, tam tarih)
+        Assert.Throws<ArgumentException>(() =>
+            DateValidator.ValidateCompletionDate(new CompletionDateDto { Year = 1999 }));
+        Assert.Throws<ArgumentException>(() =>
+            DateValidator.ValidateCompletionDate(new CompletionDateDto { Year = 1999, Month = 12 }));
+        Assert.Throws<ArgumentException>(() =>
+            DateValidator.ValidateCompletionDate(new CompletionDateDto { Year = 1999, Month = 12, Day = 31 }));
+        Assert.Throws<ArgumentException>(() =>
+            DateValidator.ValidateCompletionDate(new CompletionDateDto { Year = 1995 }));
+
+        // 2000 sınırı geçerlidir
+        DateValidator.ValidateCompletionDate(new CompletionDateDto { Year = 2000 });
+        DateValidator.ValidateCompletionDate(new CompletionDateDto { Year = 2000, Month = 1 });
+        DateValidator.ValidateCompletionDate(new CompletionDateDto { Year = 2000, Month = 1, Day = 1 });
+    }
+
+    [Fact]
+    public void DateValidator_CompletionDate_FutureRuleStillWorks()
+    {
+        // Gelecek yıllar hâlâ reddedilir (yıl-sonu UTC tolerans kenarına düşmemek için +2)
+        Assert.Throws<ArgumentException>(() =>
+            DateValidator.ValidateCompletionDate(new CompletionDateDto { Year = CurrentYear + 2 }));
+
+        // 9999 ve üstü teknik sınırı: DateTime hatası yerine ArgumentException
+        Assert.Throws<ArgumentException>(() =>
+            DateValidator.ValidateCompletionDate(new CompletionDateDto { Year = 10000, Month = 1, Day = 1 }));
+        Assert.Throws<ArgumentException>(() =>
+            DateValidator.ValidateCompletionDate(new CompletionDateDto { Year = 99999 }));
+
+        // Bugün ve bu yıl geçerlidir
+        var today = DateTime.UtcNow.Date;
+        DateValidator.ValidateCompletionDate(new CompletionDateDto { Year = today.Year });
+        DateValidator.ValidateCompletionDate(new CompletionDateDto { Year = today.Year, Month = today.Month });
+        DateValidator.ValidateCompletionDate(new CompletionDateDto { Year = today.Year, Month = today.Month, Day = today.Day });
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    [InlineData(1001)]
+    [InlineData(9999)]
+    public async Task CreateOrUpdateGoal_InvalidTargetBooks_ShouldThrow_AndNotSave(int targetBooks)
+    {
+        var goalRepo = new FakeGoalRepository();
+        var service = new ReadingGoalService(goalRepo, new FakeUserBookRepository());
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.CreateOrUpdateGoalAsync(1, CurrentYear, new CreateOrUpdateReadingGoalRequest { TargetBooks = targetBooks }));
+
+        // Geçersiz istek veritabanına (burada sahte repository'ye) hiçbir kayıt yazmamalı
+        Assert.Empty(goalRepo.Goals);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(12)]
+    [InlineData(1000)]
+    public async Task CreateOrUpdateGoal_ValidTargetBooks_ShouldSave(int targetBooks)
+    {
+        var goalRepo = new FakeGoalRepository();
+        var service = new ReadingGoalService(goalRepo, new FakeUserBookRepository());
+
+        var result = await service.CreateOrUpdateGoalAsync(1, CurrentYear, new CreateOrUpdateReadingGoalRequest { TargetBooks = targetBooks });
+
+        Assert.Equal(targetBooks, result.TargetBooks);
+        Assert.Single(goalRepo.Goals);
+        Assert.Equal(targetBooks, goalRepo.Goals[0].TargetBooks);
+    }
+
+    [Fact]
+    public async Task ReadingGoalService_InvalidYear_ShouldThrow_ForPutGetAndMonthly()
+    {
+        var goalRepo = new FakeGoalRepository();
+        var service = new ReadingGoalService(goalRepo, new FakeUserBookRepository());
+
+        var invalidYears = new[] { 0, 1800, 1999, 3000, CurrentYear + 2 };
+
+        foreach (var year in invalidYears)
+        {
+            // PUT
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                service.CreateOrUpdateGoalAsync(1, year, new CreateOrUpdateReadingGoalRequest { TargetBooks = 10 }));
+
+            // GET /{year}
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                service.GetAnnualGoalAsync(1, year));
+
+            // GET /monthly
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                service.GetMonthlySummaryAsync(1, year, 6, 1, 10));
+        }
+
+        // Hiçbir geçersiz istek kayıt oluşturmamalı
+        Assert.Empty(goalRepo.Goals);
+    }
+
+    [Fact]
+    public async Task ReadingGoalService_YearBoundaries_2000AndNextYear_ShouldWork()
+    {
+        var goalRepo = new FakeGoalRepository();
+        var service = new ReadingGoalService(goalRepo, new FakeUserBookRepository());
+
+        foreach (var year in new[] { 2000, CurrentYear + 1 })
+        {
+            var created = await service.CreateOrUpdateGoalAsync(1, year, new CreateOrUpdateReadingGoalRequest { TargetBooks = 10 });
+            Assert.Equal(year, created.Year);
+
+            var fetched = await service.GetAnnualGoalAsync(1, year);
+            Assert.Equal(10, fetched.TargetBooks);
+
+            var monthly = await service.GetMonthlySummaryAsync(1, year, 1, 1, 10);
+            Assert.Equal(year, monthly.Year);
+        }
+    }
+
+    [Fact]
+    public async Task GetMonthlySummary_InvalidMonth_ShouldThrow_AndBoundariesWork()
+    {
+        var service = new ReadingGoalService(new FakeGoalRepository(), new FakeUserBookRepository());
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetMonthlySummaryAsync(1, CurrentYear, 0, 1, 10));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetMonthlySummaryAsync(1, CurrentYear, 13, 1, 10));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetMonthlySummaryAsync(1, CurrentYear, -1, 1, 10));
+
+        // Sınır aylar geçerli
+        await service.GetMonthlySummaryAsync(1, CurrentYear, 1, 1, 10);
+        await service.GetMonthlySummaryAsync(1, CurrentYear, 12, 1, 10);
+    }
 }

@@ -110,6 +110,56 @@ public class StatisticsServiceTests
     }
 
     // -------------------------------------------------------------------
+    // 4️⃣ Test: Monthly – year (2000 .. this year + 1) and month (1..12) boundaries
+    // -------------------------------------------------------------------
+    [Fact]
+    public async Task GetMonthlyAsync_YearAndMonthBoundaries_AreValidated()
+    {
+        var service = new StatisticsService(new FakeStatisticsRepository());
+        var maxYear = DateTime.UtcNow.Year + 1;
+
+        // Geçerli sınırlar
+        await service.GetMonthlyAsync(1, 2000, 1);
+        await service.GetMonthlyAsync(1, maxYear, 12);
+
+        // Geçersiz yıllar
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetMonthlyAsync(1, 1999, 6));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetMonthlyAsync(1, maxYear + 1, 6));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetMonthlyAsync(1, 1800, 6));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetMonthlyAsync(1, 3000, 6));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetMonthlyAsync(1, 0, 6));
+
+        // Geçersiz aylar
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetMonthlyAsync(1, 2026, 0));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetMonthlyAsync(1, 2026, 13));
+    }
+
+    // -------------------------------------------------------------------
+    // 5️⃣ Test: Yearly – year (2000 .. this year + 1) boundaries
+    // -------------------------------------------------------------------
+    [Fact]
+    public async Task GetYearlyAsync_YearBoundaries_AreValidated()
+    {
+        var service = new StatisticsService(new FakeStatisticsRepository());
+        var maxYear = DateTime.UtcNow.Year + 1;
+
+        // Geçerli sınırlar
+        var first = await service.GetYearlyAsync(1, 2000);
+        Assert.Equal(2000, first.Year);
+        Assert.Equal(12, first.Months.Count); // boş yıl da 12 ay sıfırla döner
+
+        var last = await service.GetYearlyAsync(1, maxYear);
+        Assert.Equal(maxYear, last.Year);
+
+        // Geçersiz yıllar
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetYearlyAsync(1, 1999));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetYearlyAsync(1, maxYear + 1));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetYearlyAsync(1, 1800));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetYearlyAsync(1, 3000));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GetYearlyAsync(1, 0));
+    }
+
+    // -------------------------------------------------------------------
     // Helper fake repository – implements every method of IStatisticsRepository.
     // -------------------------------------------------------------------
     private class FakeStatisticsRepository : IStatisticsRepository
