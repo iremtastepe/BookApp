@@ -71,8 +71,6 @@ builder.Services.AddScoped<IUserBookRepository, UserBookRepository>();
 builder.Services.AddScoped<IUserBookService, UserBookService>();
 builder.Services.AddScoped<IReadingGoalRepository, ReadingGoalRepository>(); // Yıllık hedefler repository
 builder.Services.AddScoped<IReadingGoalService, ReadingGoalService>();       // Yıllık hedefler ve aylık okuma servisi
-builder.Services.AddScoped<IReadingGoalRepository, ReadingGoalRepository>(); // Yıllık hedefler repository
-builder.Services.AddScoped<IReadingGoalService, ReadingGoalService>();       // Yıllık hedefler ve aylık okuma servisi
 builder.Services.AddScoped<IStatisticsRepository, StatisticsRepository>();   // Kişisel istatistikler repository
 builder.Services.AddScoped<IStatisticsService, StatisticsService>();         // Kişisel istatistikler servisi
 
