@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using BookApp.Application.DTOs.Goals;
 using BookApp.Application.DTOs.Library;
 using BookApp.Application.Helpers;
@@ -755,5 +757,252 @@ public class ReadingGoalsAndDatesTests
         // Sınır aylar geçerli
         await service.GetMonthlySummaryAsync(1, CurrentYear, 1, 1, 10);
         await service.GetMonthlySummaryAsync(1, CurrentYear, 12, 1, 10);
+    }
+
+    // --- 5. Review ve Rating Güncelleme Testleri ---
+    // Kural: sadece gönderilen alan güncellenir, null/gönderilmeyen alan korunur, en az bir alan zorunludur.
+    private const decimal OriginalRating = 3.5m;
+    private const string OriginalReview = "Eski yorum";
+
+    // Tek kayıtlı sahte repository ve servis kurar; kayıt nesnesini de döndürür ki "değişmedi" kontrolü yapılabilsin
+    private static (UserBookService Service, UserBook Record) CreateServiceWithBook(
+        ReadingStatus status,
+        int ownerUserId = 1,
+        decimal? rating = OriginalRating,
+        string? review = OriginalReview)
+    {
+        var repo = new FakeUserBookRepository();
+        var service = new UserBookService(repo, new FakeBookRepository());
+
+        var record = new UserBook
+        {
+            Id = 1,
+            UserId = ownerUserId,
+            BookId = 1,
+            Status = status,
+            Rating = rating,
+            Review = review,
+            Book = new Book { Id = 1, Title = "A", Author = "B" }
+        };
+        repo.Books.Add(record);
+
+        return (service, record);
+    }
+
+    [Fact]
+    public async Task UpdateReviewAndRating_EmptyBody_ShouldThrow_AndKeepRatingAndReview()
+    {
+        var (service, record) = CreateServiceWithBook(ReadingStatus.Read);
+
+        // {} -> rating ve review ikisi de null
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.UpdateReviewAndRatingAsync(1, 1, new UpdateReviewAndRatingRequest()));
+
+        // Açıkça null göndermek de aynı: "gönderilmedi" sayılır
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.UpdateReviewAndRatingAsync(1, 1, new UpdateReviewAndRatingRequest { Rating = null, Review = null }));
+
+        // Kayıtlı puan ve yorum silinmemiş olmalı
+        Assert.Equal(OriginalRating, record.Rating);
+        Assert.Equal(OriginalReview, record.Review);
+    }
+
+    [Fact]
+    public async Task UpdateReviewAndRating_OnlyRating_ShouldUpdateRating_AndKeepReview()
+    {
+        var (service, record) = CreateServiceWithBook(ReadingStatus.Read);
+
+        var result = await service.UpdateReviewAndRatingAsync(1, 1, new UpdateReviewAndRatingRequest { Rating = 4.5m });
+
+        Assert.Equal(4.5m, result.Rating);
+        Assert.Equal(OriginalReview, result.Review);
+        Assert.Equal(4.5m, record.Rating);
+        Assert.Equal(OriginalReview, record.Review);
+    }
+
+    [Fact]
+    public async Task UpdateReviewAndRating_OnlyReview_ShouldUpdateReview_AndKeepRating()
+    {
+        var (service, record) = CreateServiceWithBook(ReadingStatus.Read);
+
+        var result = await service.UpdateReviewAndRatingAsync(1, 1, new UpdateReviewAndRatingRequest { Review = "Yeni yorum" });
+
+        Assert.Equal("Yeni yorum", result.Review);
+        Assert.Equal(OriginalRating, result.Rating);
+        Assert.Equal("Yeni yorum", record.Review);
+        Assert.Equal(OriginalRating, record.Rating);
+    }
+
+    [Fact]
+    public async Task UpdateReviewAndRating_BothFields_ShouldUpdateBoth()
+    {
+        var (service, record) = CreateServiceWithBook(ReadingStatus.Read);
+
+        var result = await service.UpdateReviewAndRatingAsync(1, 1, new UpdateReviewAndRatingRequest
+        {
+            Rating = 5m,
+            Review = "Harika"
+        });
+
+        Assert.Equal(5m, result.Rating);
+        Assert.Equal("Harika", result.Review);
+        Assert.Equal(5m, record.Rating);
+        Assert.Equal("Harika", record.Review);
+    }
+
+    [Fact]
+    public async Task UpdateReviewAndRating_NullRatingWithReview_ShouldKeepRating_AndUpdateReview()
+    {
+        var (service, record) = CreateServiceWithBook(ReadingStatus.Read);
+
+        // {"rating": null, "review": "Yeni yorum"}: null rating "dokunma" demektir, puan silinmez
+        var result = await service.UpdateReviewAndRatingAsync(1, 1, new UpdateReviewAndRatingRequest
+        {
+            Rating = null,
+            Review = "Yeni yorum"
+        });
+
+        Assert.Equal(OriginalRating, result.Rating);
+        Assert.Equal("Yeni yorum", result.Review);
+        Assert.Equal(OriginalRating, record.Rating);
+        Assert.Equal("Yeni yorum", record.Review);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t \n")]
+    public async Task UpdateReviewAndRating_EmptyOrWhitespaceReview_ShouldClearReviewToNull_AndKeepRating(string emptyReview)
+    {
+        var (service, record) = CreateServiceWithBook(ReadingStatus.Read);
+
+        // Boş metin geçerli bir "yorumu sil" isteğidir: hata değil, 200 (burada exception yok)
+        var result = await service.UpdateReviewAndRatingAsync(1, 1, new UpdateReviewAndRatingRequest { Review = emptyReview });
+
+        // Veritabanına boş metin değil null yazılır, puan olduğu gibi kalır
+        Assert.Null(result.Review);
+        Assert.Null(record.Review);
+        Assert.Equal(OriginalRating, result.Rating);
+        Assert.Equal(OriginalRating, record.Rating);
+    }
+
+    [Theory]
+    [InlineData(ReadingStatus.Read)]
+    [InlineData(ReadingStatus.DidNotFinish)]
+    public async Task UpdateReviewAndRating_ReadOrDidNotFinish_ShouldBeAllowed(ReadingStatus status)
+    {
+        var (service, record) = CreateServiceWithBook(status);
+
+        var result = await service.UpdateReviewAndRatingAsync(1, 1, new UpdateReviewAndRatingRequest { Rating = 2m });
+
+        Assert.Equal(2m, result.Rating);
+        Assert.Equal(2m, record.Rating);
+    }
+
+    [Theory]
+    [InlineData(ReadingStatus.NotStarted)]
+    [InlineData(ReadingStatus.Reading)]
+    [InlineData(ReadingStatus.NextUp)]
+    public async Task UpdateReviewAndRating_OtherStatuses_ShouldThrowInvalidOperation_AndKeepData(ReadingStatus status)
+    {
+        var (service, record) = CreateServiceWithBook(status);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.UpdateReviewAndRatingAsync(1, 1, new UpdateReviewAndRatingRequest
+            {
+                Rating = 5m,
+                Review = "Yeni yorum"
+            }));
+
+        // Reddedilen istek hiçbir alanı değiştirmemeli
+        Assert.Equal(OriginalRating, record.Rating);
+        Assert.Equal(OriginalReview, record.Review);
+    }
+
+    [Fact]
+    public async Task UpdateReviewAndRating_OtherUsersRecord_ShouldThrowNotFound_AndKeepOwnersData()
+    {
+        // Kayıt kullanıcı 1'e ait, istek kullanıcı 2'den geliyor
+        var (service, record) = CreateServiceWithBook(ReadingStatus.Read, ownerUserId: 1);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            service.UpdateReviewAndRatingAsync(2, 1, new UpdateReviewAndRatingRequest
+            {
+                Rating = 1m,
+                Review = "Başkasının yorumu"
+            }));
+
+        // Kayıt sahibinin verisi değişmemeli
+        Assert.Equal(OriginalRating, record.Rating);
+        Assert.Equal(OriginalReview, record.Review);
+    }
+
+    // --- 5b. UpdateReviewAndRatingRequest DTO Doğrulama Testleri ---
+    // Rating aralığı, 0.5 adımı ve 2000 karakter sınırı servise değil DTO'ya aittir.
+    // [ApiController] geçersiz DTO'yu servise ulaşmadan 400 ile reddeder; yani geçersiz alan varken
+    // iki alan da değişmez. Burada DTO'nun kendi kuralları doğrudan çalıştırılır.
+    private static List<ValidationResult> ValidateDto(UpdateReviewAndRatingRequest request)
+    {
+        var results = new List<ValidationResult>();
+        Validator.TryValidateObject(request, new ValidationContext(request), results, validateAllProperties: true);
+        return results;
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("0.3")]
+    [InlineData("4.25")]
+    [InlineData("5.5")]
+    [InlineData("6")]
+    [InlineData("-1")]
+    public void UpdateReviewAndRatingRequest_InvalidRating_ShouldFailValidation(string rating)
+    {
+        var request = new UpdateReviewAndRatingRequest
+        {
+            Rating = decimal.Parse(rating, CultureInfo.InvariantCulture),
+            Review = "geçerli yorum"
+        };
+
+        Assert.NotEmpty(ValidateDto(request));
+    }
+
+    [Fact]
+    public void UpdateReviewAndRatingRequest_TooLongReview_ShouldFailValidation()
+    {
+        // 2000 karakter sınırı: 2001 karakter reddedilir
+        var request = new UpdateReviewAndRatingRequest
+        {
+            Rating = 4m,
+            Review = new string('a', 2001)
+        };
+
+        Assert.NotEmpty(ValidateDto(request));
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("4.5")]
+    [InlineData("5")]
+    public void UpdateReviewAndRatingRequest_ValidRating_ShouldPassValidation(string rating)
+    {
+        var request = new UpdateReviewAndRatingRequest
+        {
+            Rating = decimal.Parse(rating, CultureInfo.InvariantCulture)
+        };
+
+        Assert.Empty(ValidateDto(request));
+    }
+
+    [Fact]
+    public void UpdateReviewAndRatingRequest_BoundaryAndPartialBodies_ShouldPassValidation()
+    {
+        // 2000 karakter sınırda geçerli
+        Assert.Empty(ValidateDto(new UpdateReviewAndRatingRequest { Review = new string('a', 2000) }));
+
+        // Yalnızca review, yalnızca rating ve boş metin DTO için geçerli (boş gövdeyi servis reddeder)
+        Assert.Empty(ValidateDto(new UpdateReviewAndRatingRequest { Review = "yorum" }));
+        Assert.Empty(ValidateDto(new UpdateReviewAndRatingRequest { Rating = 4.5m }));
+        Assert.Empty(ValidateDto(new UpdateReviewAndRatingRequest { Review = "" }));
+        Assert.Empty(ValidateDto(new UpdateReviewAndRatingRequest()));
     }
 }

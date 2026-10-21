@@ -243,15 +243,31 @@ public class UserBookService : IUserBookService
 
     public async Task<UserBookDto> UpdateReviewAndRatingAsync(int userId, int userBookId, UpdateReviewAndRatingRequest request)
     {
+        // Hangi alanların gönderildiği: null = "gönderilmedi" (alan hiç yok ya da açıkça null).
+        // Gönderilmeyen alana DOKUNULMAZ; eskiden iki alan koşulsuz yazıldığı için {} kayıtlı puanı ve yorumu siliyordu.
+        // Bu kontrol veritabanına gitmeden önce yapılır: geçersiz istek için boşuna sorgu atmayız.
+        var hasRating = request.Rating.HasValue;
+        var hasReview = request.Review is not null;
+
+        if (!hasRating && !hasReview)
+            throw new ArgumentException("En az bir alan gönderilmelidir: rating veya review.");  // 400
+
+        // Aralık, 0.5 adımı ve 2000 karakter sınırı DTO'daki niteliklerle ([ApiController] otomatik 400) kontrol edilir;
+        // geçersiz bir alan varsa istek buraya hiç gelmez, yani iki alan da değişmez.
         var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
         if (userBook is null)
-            throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");
+            throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");  // 404
 
         if (userBook.Status != ReadingStatus.Read && userBook.Status != ReadingStatus.DidNotFinish)
-            throw new InvalidOperationException("Bir kitaba yorum yapmak veya puan vermek için kitabı bitirmiş veya okumayı bırakmış olmalısınız.");
+            throw new InvalidOperationException("Bir kitaba yorum yapmak veya puan vermek için kitabı bitirmiş veya okumayı bırakmış olmalısınız.");  // 400
 
-        userBook.Rating = request.Rating;
-        userBook.Review = request.Review;
+        // Sadece gönderilen alan güncellenir, diğeri aynen korunur
+        if (hasRating)
+            userBook.Rating = request.Rating;
+
+        // Boş metin veya yalnızca boşluk "yorumu sil" demektir: veritabanına boş metin değil null yazılır
+        if (hasReview)
+            userBook.Review = string.IsNullOrWhiteSpace(request.Review) ? null : request.Review;
 
         await _userBookRepository.UpdateAsync(userBook);
 

@@ -92,6 +92,11 @@ public class LibraryController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Kitaba puan ve/veya yorum ekler. Yalnızca gönderilen alan güncellenir, gönderilmeyen (veya null) alan korunur.
+    /// En az bir alan gönderilmelidir. Boş metin ("") veya yalnızca boşluk içeren review yorumu siler.
+    /// PUT /api/Library/5/review
+    /// </summary>
     [HttpPut("{id}/review")]
     public async Task<ActionResult<UserBookDto>> UpdateReviewAndRating(int id, UpdateReviewAndRatingRequest request)
     {
@@ -106,7 +111,11 @@ public class LibraryController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(new { message = ex.Message }); // Read veya DidNotFinish olmayan kitap: 400
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message }); // Ne rating ne review gönderildi (boş gövde): 400
         }
     }
 
