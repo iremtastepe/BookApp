@@ -1,16 +1,18 @@
+
 using BookApp.Domain.Entities;
 using BookApp.Infrastructure;
 using BookApp.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using System.Text;
 using BookApp.Application.Interfaces;
 using BookApp.Infrastructure.Services;
-using BookApp.Application.Services;          // BookService ve UserBookService için
-using BookApp.Infrastructure.Repositories;   // BookRepository ve UserBookRepository için
+using BookApp.Application.Services;
+using BookApp.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,7 +63,29 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddAuthorization();
-builder.Services.AddControllers();
+
+// 6.6 Adım 2b: DTO/model doğrulama hatalarında ortak yanıt biçimi
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState
+                .Where(e => e.Value is { Errors.Count: > 0 })
+                .ToDictionary(
+                    e => e.Key,
+                    e => e.Value!.Errors
+                        .Select(x => string.IsNullOrWhiteSpace(x.ErrorMessage)
+                            ? "Geçersiz değer."
+                            : x.ErrorMessage)
+                        .ToArray());
+
+            var message = errors.Values.FirstOrDefault()?.FirstOrDefault()
+                ?? "Geçersiz istek.";
+
+            return new BadRequestObjectResult(new { message, errors });
+        };
+    });
 
 // Servis kayıtları (DI)
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -69,11 +93,10 @@ builder.Services.AddScoped<IBookRepository, BookRepository>();
 builder.Services.AddScoped<IBookService, BookService>();
 builder.Services.AddScoped<IUserBookRepository, UserBookRepository>();
 builder.Services.AddScoped<IUserBookService, UserBookService>();
-builder.Services.AddScoped<IReadingGoalRepository, ReadingGoalRepository>(); // Yıllık hedefler repository
-builder.Services.AddScoped<IReadingGoalService, ReadingGoalService>();       // Yıllık hedefler ve aylık okuma servisi
-builder.Services.AddScoped<IStatisticsRepository, StatisticsRepository>();   // Kişisel istatistikler repository
-builder.Services.AddScoped<IStatisticsService, StatisticsService>();         // Kişisel istatistikler servisi
-
+builder.Services.AddScoped<IReadingGoalRepository, ReadingGoalRepository>();
+builder.Services.AddScoped<IReadingGoalService, ReadingGoalService>();
+builder.Services.AddScoped<IStatisticsRepository, StatisticsRepository>();
+builder.Services.AddScoped<IStatisticsService, StatisticsService>();
 
 // Altyapı (Infrastructure) servislerimizi kaydediyoruz (İşçiler ve Şef)
 builder.Services.AddInfrastructureServices();
