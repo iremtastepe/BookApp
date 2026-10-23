@@ -42,7 +42,7 @@ public class AuthService : IAuthService
         if (!result.Succeeded)
             throw new AuthException(string.Join(", ", result.Errors.Select(e => e.Description)));
 
-        var token = GenerateToken(user);
+        var token = await GenerateTokenAsync(user);
 
         return new AuthResponse
         {
@@ -63,7 +63,7 @@ public class AuthService : IAuthService
         if (!isPasswordValid)
             throw new AuthException("Email veya şifre hatalı.");
 
-        var token = GenerateToken(user);
+        var token = await GenerateTokenAsync(user);
 
         return new AuthResponse
         {
@@ -74,7 +74,7 @@ public class AuthService : IAuthService
         };
     }
 
-    private string GenerateToken(User user)
+    private async Task<string> GenerateTokenAsync(User user)
     {
         var claims = new List<Claim>
         {
@@ -82,6 +82,12 @@ public class AuthService : IAuthService
             new(ClaimTypes.Name, user.UserName!),
             new(ClaimTypes.Email, user.Email!)
         };
+
+        var roles = await _userManager.GetRolesAsync(user);
+        foreach (var role in roles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
+        }
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

@@ -82,6 +82,7 @@ public class BooksController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<BookResponse>> Update(int id, UpdateBookRequest request)
     {
         try
@@ -100,6 +101,7 @@ public class BooksController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
     {
         try

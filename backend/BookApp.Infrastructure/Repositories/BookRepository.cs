@@ -64,9 +64,27 @@ public class BookRepository : IBookRepository
         await _context.SaveChangesAsync();
     }
 
+    public async Task<int?> GetMaxCurrentPageAsync(int bookId)
+    {
+        return await _context.UserBooks
+            .Where(ub => ub.BookId == bookId && ub.CurrentPage != null)
+            .MaxAsync(ub => (int?)ub.CurrentPage);
+    }
+
     public async Task DeleteAsync(Book book)
     {
         _context.Books.Remove(book);
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException pgEx && pgEx.SqlState == "23503")
+        {
+            throw new InvalidOperationException("Bu kitap kullanıcıların kitaplığında olduğu için silinemez.", ex);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException != null && ex.InnerException.Message.Contains("foreign key", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Bu kitap kullanıcıların kitaplığında olduğu için silinemez.", ex);
+        }
     }
 }

@@ -60,7 +60,7 @@ public class UserBookConfiguration : IEntityTypeConfiguration<UserBook>
         // Aynı mantık, bu sefer Book tarafı için.
             .WithMany(b => b.UserBooks)
             .HasForeignKey(ub => ub.BookId)
-            .OnDelete(DeleteBehavior.Cascade);
-            // Bir Book silinirse, ona bağlı tüm UserBook kayıtları da silinsin.
+            .OnDelete(DeleteBehavior.Restrict);
+            // Ortak katalogdaki Book, ilişkili UserBook varken silinemez (veri bütünlüğü koruması).
     }
 }

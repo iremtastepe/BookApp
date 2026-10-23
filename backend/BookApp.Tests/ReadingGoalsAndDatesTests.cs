@@ -129,6 +129,7 @@ public class ReadingGoalsAndDatesTests
         public Task<bool> IsInAnyLibraryAsync(int bookId) => Task.FromResult(false);
         public Task AddAsync(Book book) => Task.CompletedTask;
         public Task UpdateAsync(Book book) => Task.CompletedTask;
+        public Task<int?> GetMaxCurrentPageAsync(int bookId) => Task.FromResult<int?>(null);
         public Task DeleteAsync(Book book) => Task.CompletedTask;
     }
 

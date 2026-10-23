@@ -140,4 +140,7 @@ app.UseAuthorization();   // Sonra "bunu yapmaya yetkin var mı" kontrolü
 
 app.MapControllers();
 
+// Güvenli Admin rolü ve ilk kurulum kontrolü
+await IdentityDataSeeder.SeedAdminAsync(app.Services);
+
 app.Run();

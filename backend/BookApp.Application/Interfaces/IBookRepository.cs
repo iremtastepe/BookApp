@@ -10,5 +10,6 @@ public interface IBookRepository
     Task<bool> IsInAnyLibraryAsync(int bookId);
     Task AddAsync(Book book);
     Task UpdateAsync(Book book);
+    Task<int?> GetMaxCurrentPageAsync(int bookId);
     Task DeleteAsync(Book book);
 }

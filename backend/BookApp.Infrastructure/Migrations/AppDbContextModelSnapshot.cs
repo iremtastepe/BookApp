@@ -425,7 +425,7 @@ namespace BookApp.Infrastructure.Migrations
                     b.HasOne("BookApp.Domain.Entities.Book", "Book")
                         .WithMany("UserBooks")
                         .HasForeignKey("BookId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("BookApp.Domain.Entities.User", "User")

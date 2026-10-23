@@ -87,6 +87,15 @@ public class BookService : IBookService
             }
         }
 
+        if (request.PageCount.HasValue)
+        {
+            var maxCurrentPage = await _repo.GetMaxCurrentPageAsync(id);
+            if (maxCurrentPage.HasValue && request.PageCount.Value < maxCurrentPage.Value)
+            {
+                throw new InvalidOperationException($"Kitap sayfa sayısı ({request.PageCount.Value}), bu kitabı okuyan kullanıcıların mevcut ilerlemesinden ({maxCurrentPage.Value}) daha az olamaz.");
+            }
+        }
+
         book.Title = request.Title.Trim();
         book.Author = request.Author.Trim();
         book.Isbn = normalizedIsbn; // DEGISTI
