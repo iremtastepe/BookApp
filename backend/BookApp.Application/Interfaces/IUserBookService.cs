@@ -12,4 +12,5 @@ public interface IUserBookService
     Task<UserBookDto> SetFavoriteAsync(int userId, int userBookId, SetFavoriteRequest request);
     Task<UserBookDto> UpdateProgressAsync(int userId, int userBookId, UpdateProgressRequest request);
     Task<UserBookDto> UpdateFinishedDateAsync(int userId, int userBookId, UpdateFinishedDateRequest request);
+    Task<UserBookDto> UpdateStartedDateAsync(int userId, int userBookId, UpdateStartedDateRequest request);
 }

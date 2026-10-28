@@ -1,9 +1,10 @@
+using System.Globalization;
 using BookApp.Application.DTOs.Library;
 
 namespace BookApp.Application.Helpers;
 
 /// <summary>
-/// Tamamlanma tarihlerinin geçerliliğini ve takvim kurallarını denetleyen yardımcı sınıf.
+/// Tamamlanma ve başlangıç tarihlerinin geçerliliğini ve takvim kurallarını denetleyen yardımcı sınıf.
 /// Ayrıca yıl/ay aralığı kuralını (hedefler, istatistikler, bitirme tarihi) tek yerde tutar.
 /// </summary>
 public static class DateValidator
@@ -13,6 +14,9 @@ public static class DateValidator
 
     // Kabul edilen en büyük yıl: içinde bulunulan yıl + 1 (gelecek yıl için hedef planlanabilir)
     public static int MaxYear => DateTime.UtcNow.Year + 1;
+
+    // Türkçe kültür formatlama için
+    private static readonly CultureInfo TurkishCulture = new("tr-TR");
 
     /// <summary>
     /// Yıl, MinYear ile MaxYear (dahil) arasında olmalıdır. Aksi halde ArgumentException (400) fırlatır.
@@ -108,5 +112,142 @@ public static class DateValidator
         var completionDate = new DateTime(year, month, day);
         if (completionDate > maxCalendarDate)
             throw new ArgumentException("Gelecekteki bir tarih tamamlanma tarihi olarak girilemez.");
+    }
+
+    /// <summary>
+    /// Başlangıç tarihini doğrular. Başlangıç tarihi için tam tarih (yıl, ay ve gün) zorunludur.
+    /// Kısmi başlangıç tarihi kabul edilmez.
+    /// </summary>
+    public static void ValidateStartDate(CompletionDateDto? date)
+    {
+        if (date is null)
+            throw new ArgumentException("Tarih bilgisi boş olamaz.");
+
+        var hasYear = date.Year.HasValue;
+        var hasMonth = date.Month.HasValue;
+        var hasDay = date.Day.HasValue;
+
+        if (!hasYear && !hasMonth && !hasDay)
+            throw new ArgumentException("Tarih bilgisi en az yıl içermelidir.");
+
+        if (!hasYear)
+            throw new ArgumentException("Başlangıç tarihi için yıl zorunludur.");
+
+        if (!hasMonth || !hasDay)
+            throw new ArgumentException("Başlangıç tarihi tam tarih olmalıdır (yıl, ay ve gün zorunludur).");
+
+        var year = date.Year.Value;
+        var month = date.Month.Value;
+        var day = date.Day.Value;
+
+        if (year < MinYear)
+            throw new ArgumentException($"Başlangıç yılı {MinYear} veya daha büyük olmalıdır.");
+
+        if (year > 9999)
+            throw new ArgumentException("Gelecekteki bir tarih başlangıç tarihi olarak girilemez.");
+
+        ValidateMonth(month);
+
+        if (day < 1 || day > 31)
+            throw new ArgumentException("Gün 1 ile 31 arasında olmalıdır.");
+
+        var daysInMonth = DateTime.DaysInMonth(year, month);
+        if (day > daysInMonth)
+            throw new ArgumentException($"{year} yılı {month}. ayı için gün {daysInMonth} değerinden büyük olamaz.");
+
+        // Yerel saat dilimi toleransı: UTC takvim gününden en fazla 1 gün ilerisi kabul edilir
+        var maxCalendarDate = DateTime.UtcNow.Date.AddDays(1);
+        var startDate = new DateTime(year, month, day);
+
+        if (startDate > maxCalendarDate)
+            throw new ArgumentException("Gelecekteki bir tarih başlangıç tarihi olarak girilemez.");
+    }
+
+    /// <summary>
+    /// DateTime değerini saat diliminden bağımsız UTC takvim gününe (DateOnly) dönüştürür.
+    /// Unspecified değerler doğrudan UTC kabul edilir.
+    /// </summary>
+    public static DateOnly ToUtcCalendarDate(DateTime dateTime)
+    {
+        var utc = dateTime.Kind switch
+        {
+            DateTimeKind.Utc => dateTime,
+            DateTimeKind.Local => dateTime.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
+        };
+
+        return DateOnly.FromDateTime(utc);
+    }
+
+    /// <summary>
+    /// Başlangıç tarihinin bitirme tarihinden sonra olup olmadığını bilinen hassasiyete göre kontrol eder.
+    /// startedAt > finishedDate ise true döner (çelişki var).
+    /// </summary>
+    public static bool IsStartedAfterFinished(DateTime startedAt, int? finishedYear, int? finishedMonth, int? finishedDay)
+    {
+        if (!finishedYear.HasValue)
+            return false;
+
+        var startCalendarDate = ToUtcCalendarDate(startedAt);
+
+        // 1. Sadece Yıl biliniyorsa
+        if (!finishedMonth.HasValue)
+            return startCalendarDate.Year > finishedYear.Value;
+
+        // 2. Yıl ve Ay biliniyorsa
+        if (!finishedDay.HasValue)
+        {
+            if (startCalendarDate.Year != finishedYear.Value)
+                return startCalendarDate.Year > finishedYear.Value;
+
+            return startCalendarDate.Month > finishedMonth.Value;
+        }
+
+        // 3. Tam Tarih biliniyorsa
+        var finishedDate = new DateOnly(finishedYear.Value, finishedMonth.Value, finishedDay.Value);
+        return startCalendarDate > finishedDate;
+    }
+
+    /// <summary>
+    /// Başlangıç tarihinin yarım bırakma tarihinden sonra olup olmadığını ±1 gün toleransıyla kontrol eder.
+    /// startedAt.Date > didNotFinishAt.Date.AddDays(1) ise true döner (çelişki var).
+    /// </summary>
+    public static bool IsStartedAfterDidNotFinish(DateTime startedAt, DateTime didNotFinishAt)
+    {
+        var startDate = ToUtcCalendarDate(startedAt);
+        var dnfDate = ToUtcCalendarDate(didNotFinishAt);
+
+        return startDate > dnfDate.AddDays(1);
+    }
+
+    /// <summary>
+    /// Kısmi veya tam bitirme tarihini kullanıcı dostu Türkçe metin olarak biçimlendirir.
+    /// </summary>
+    public static string FormatPartialDate(int? year, int? month, int? day)
+    {
+        if (!year.HasValue)
+            return "-";
+
+        if (!month.HasValue)
+            return year.Value.ToString();
+
+        if (!day.HasValue)
+        {
+            var date = new DateTime(year.Value, month.Value, 1);
+            return date.ToString("MMMM yyyy", TurkishCulture);
+        }
+
+        var fullDate = new DateTime(year.Value, month.Value, day.Value);
+        return fullDate.ToString("d MMMM yyyy", TurkishCulture);
+    }
+
+    /// <summary>
+    /// DateTime nesnesini Türkçe "d MMMM yyyy" formatında biçimlendirir.
+    /// </summary>
+    public static string FormatCalendarDate(DateTime dateTime)
+    {
+        var d = ToUtcCalendarDate(dateTime);
+        var dt = new DateTime(d.Year, d.Month, d.Day);
+        return dt.ToString("d MMMM yyyy", TurkishCulture);
     }
 }

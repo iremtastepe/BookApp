@@ -1,3 +1,4 @@
+using BookApp.Application.Helpers;
 using BookApp.Domain.Enums;
 
 namespace BookApp.Application.DTOs.Library;
@@ -23,8 +24,13 @@ public class UserBookDto
     public DateOnly? FinishedDate => (FinishedYear.HasValue && FinishedMonth.HasValue && FinishedDay.HasValue)
         ? new DateOnly(FinishedYear.Value, FinishedMonth.Value, FinishedDay.Value)
         : null;
+
+    // StartedAt UTC DateTime olarak saklanır; takvim günü saat diliminden bağımsız olarak hesaplanır
+    public DateOnly? StartedDate => StartedAt.HasValue
+        ? DateValidator.ToUtcCalendarDate(StartedAt.Value)
+        : null;
+
     public DateTime AddedAt { get; set; }
     public DateTime? DidNotFinishAt { get; set; }
     public int? PageCount { get; set; }
-
 }

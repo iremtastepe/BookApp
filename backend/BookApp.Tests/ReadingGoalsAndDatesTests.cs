@@ -11,7 +11,7 @@ using Xunit;
 
 namespace BookApp.Tests;
 
-public class ReadingGoalsAndDatesTests
+public partial class ReadingGoalsAndDatesTests
 {
     // --- 1. DateValidator Testleri ---
     [Fact]

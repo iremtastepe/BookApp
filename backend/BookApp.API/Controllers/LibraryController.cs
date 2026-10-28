@@ -19,8 +19,8 @@ public class LibraryController : ControllerBase
         _userBookService = userBookService;
     }
 
-    private int GetUserId()
-        => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    private int GetUserId() =>
+        int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
     [HttpPost]
     public async Task<ActionResult<UserBookDto>> AddToLibrary(AddToLibraryRequest request)
@@ -28,7 +28,7 @@ public class LibraryController : ControllerBase
         try
         {
             var result = await _userBookService.AddToLibraryAsync(GetUserId(), request);
-            return CreatedAtAction(nameof(AddToLibrary), new { id = result.Id }, result);
+            return CreatedAtAction(nameof(GetLibrary), new { id = result.Id }, result);
         }
         catch (KeyNotFoundException ex)
         {
@@ -40,8 +40,6 @@ public class LibraryController : ControllerBase
         }
     }
 
-    // [FromQuery] şart: [ApiController] varsayılan olarak karmaşık sınıfları gövdeden (body) okumaya çalışır.
-    // Bu işaret "LibraryQuery'nin alanlarını URL'deki ?search=...&status=... parametrelerinden doldur" der.
     [HttpGet]
     public async Task<ActionResult<PagedResponse<UserBookDto>>> GetLibrary([FromQuery] LibraryQuery query)
     {
@@ -92,11 +90,6 @@ public class LibraryController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Kitaba puan ve/veya yorum ekler. Yalnızca gönderilen alan güncellenir, gönderilmeyen (veya null) alan korunur.
-    /// En az bir alan gönderilmelidir. Boş metin ("") veya yalnızca boşluk içeren review yorumu siler.
-    /// PUT /api/Library/5/review
-    /// </summary>
     [HttpPut("{id}/review")]
     public async Task<ActionResult<UserBookDto>> UpdateReviewAndRating(int id, UpdateReviewAndRatingRequest request)
     {
@@ -109,13 +102,13 @@ public class LibraryController : ControllerBase
         {
             return NotFound(new { message = ex.Message });
         }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message }); // Read veya DidNotFinish olmayan kitap: 400
-        }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message }); // Ne rating ne review gönderildi (boş gövde): 400
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
     }
 
@@ -133,8 +126,6 @@ public class LibraryController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            // Servis "Read olmayan kitap favoriye eklenemez" kuralını bu hatayla bildirir (409).
-            // Bu yakalama olmadan hata yakalanmaz ve 500 dönerdi
             return Conflict(new { message = ex.Message });
         }
     }
@@ -153,15 +144,41 @@ public class LibraryController : ControllerBase
         }
         catch (KeyNotFoundException ex)
         {
-            return NotFound(new { message = ex.Message }); // Başkasına ait veya bulunamayan kayıt: 404
+            return NotFound(new { message = ex.Message });
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message }); // Geçersiz tarih kuralları veya çelişkili seçenekler: 400
+            return BadRequest(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = ex.Message }); // Read durumunda olmayan kitap: 400
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// 'Okunuyor', 'Okundu' veya 'Yarım bırakıldı' durumundaki bir kitabın başlangıç tarihini düzenler.
+    /// PUT /api/Library/5/started-date
+    /// </summary>
+    [HttpPut("{id}/started-date")]
+    public async Task<ActionResult<UserBookDto>> UpdateStartedDate(int id, UpdateStartedDateRequest request)
+    {
+        try
+        {
+            var result = await _userBookService.UpdateStartedDateAsync(GetUserId(), id, request);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
     }
 }
