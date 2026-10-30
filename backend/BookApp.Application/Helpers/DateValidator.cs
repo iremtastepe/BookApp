@@ -136,9 +136,11 @@ public static class DateValidator
         if (!hasMonth || !hasDay)
             throw new ArgumentException("Başlangıç tarihi tam tarih olmalıdır (yıl, ay ve gün zorunludur).");
 
-        var year = date.Year.Value;
-        var month = date.Month.Value;
-        var day = date.Day.Value;
+        // Yukarıdaki kontroller yıl, ay ve günün dolu olduğunu garanti eder (aksi halde hata fırlatılır).
+        // Derleyici bunu hasYear/hasMonth/hasDay değişkenlerinden çıkaramadığı için null-forgiving (!) kullanıyoruz.
+        var year = date.Year!.Value;
+        var month = date.Month!.Value;
+        var day = date.Day!.Value;
 
         if (year < MinYear)
             throw new ArgumentException($"Başlangıç yılı {MinYear} veya daha büyük olmalıdır.");

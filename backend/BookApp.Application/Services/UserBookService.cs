@@ -100,10 +100,32 @@ public class UserBookService : IUserBookService
             if (hasFinishedDate && isUnknown)
                 throw new ArgumentException("finishedDate ve finishedDateUnknown aynı anda belirtilemez.");
 
-            // Kitap zaten Read durumundaysa: durumun tekrar Read gönderilmesi mevcut bitiş tarihini DEĞİŞTİRMEZ veya TEMİZLEMEZ.
+            // Kitap zaten Read durumundaysa: durumun tekrar Read gönderilmesi mevcut bitiş tarihini ASLA sessizce değiştirmez veya temizlemez.
+            //   - Tarih belirtilmediyse: hiçbir şey değişmez (200).
+            //   - Belirtilen tarih mevcut tarihle aynıysa (veya bilinmiyor zaten bilinmiyorsa): hiçbir şey değişmez (200).
+            //   - Farklıysa: 400. Bitiş tarihini değiştirmek için PUT /api/Library/{id}/finished-date kullanılmalıdır.
+            // Doğrulamalar hiçbir alan değiştirilmeden önce yapılır (validation-first).
             if (userBook.Status == ReadingStatus.Read)
             {
-                // Mevcut tarih korunur, hiçbir alan ezilmez
+                const string changeDateHint = "Bitiş tarihini değiştirmek için PUT /api/Library/{id}/finished-date kullanın.";
+
+                if (isUnknown)
+                {
+                    var alreadyUnknown = userBook.FinishedYear is null && userBook.FinishedMonth is null && userBook.FinishedDay is null;
+                    if (!alreadyUnknown)
+                        throw new ArgumentException($"Kitap zaten 'Okundu' durumunda ve bitiş tarihi kayıtlı; tarih sessizce 'bilinmiyor' yapılamaz. {changeDateHint}");
+                }
+                else if (hasFinishedDate)
+                {
+                    DateValidator.ValidateCompletionDate(request.FinishedDate);
+
+                    var sameDate = userBook.FinishedYear == request.FinishedDate!.Year
+                                   && userBook.FinishedMonth == request.FinishedDate.Month
+                                   && userBook.FinishedDay == request.FinishedDate.Day;
+                    if (!sameDate)
+                        throw new ArgumentException($"Kitap zaten 'Okundu' durumunda ve gönderilen bitiş tarihi mevcut tarihten farklı. {changeDateHint}");
+                }
+                // Tarih belirtilmediyse: mevcut kayıt aynen korunur
             }
             else
             {
@@ -181,7 +203,13 @@ public class UserBookService : IUserBookService
         {
             var isReachingEnd = isTotalPagesKnown && newPage == totalPages;
 
-            if (isReachingEnd && userBook.Status != ReadingStatus.Read)
+            // Son sayfaya ulaşınca otomatik "Read" geçişi sadece NotStarted/NextUp/Reading için geçerlidir.
+            //   - Read: zaten bitmiş sayılır, tekrar geçiş gerekmez.
+            //   - DidNotFinish: kullanıcının bilinçli kararıdır (kitabı yarım bıraktı). Son sayfa girilse bile
+            //     durum DidNotFinish kalır, sadece CurrentPage güncellenir; Read'e geçişi kullanıcı açıkça yapar.
+            var canAutoComplete = userBook.Status is not (ReadingStatus.Read or ReadingStatus.DidNotFinish);
+
+            if (isReachingEnd && canAutoComplete)
             {
                 // Validation-first: LocalDate veya UTC bitirme tarihi hesaplama ve kontrolü
                 int? finYear;
@@ -237,7 +265,8 @@ public class UserBookService : IUserBookService
             }
             else
             {
-                // Kitap henüz bitmediyse veya zaten Read ise standart ilerleme
+                // Kitap henüz bitmediyse, zaten Read ise veya DidNotFinish ise standart ilerleme:
+                // sadece CurrentPage güncellenir (durum yalnızca NotStarted/NextUp -> Reading olabilir)
                 userBook.CurrentPage = newPage;
 
                 if (userBook.Status is ReadingStatus.NotStarted or ReadingStatus.NextUp)
@@ -406,8 +435,16 @@ public class UserBookService : IUserBookService
         return MapToDto(userBook);
     }
 
+    // Durum değişikliğinin tek merkezi: hem manuel (status endpoint'i) hem otomatik (progress endpoint'i)
+    // geçişler buradan geçer. Hangi alanın ne olacağı HEDEF duruma göre belirlenir; StartedAt için
+    // ayrıca KAYNAK (önceki) durum de önemlidir.
     private static void ApplyStatusChange(UserBook userBook, ReadingStatus newStatus)
     {
+        // Eski durumu, Status üzerine yazılmadan ÖNCE yakalıyoruz.
+        // Çünkü StartedAt kuralı "nereden geliyorsun?" sorusuna bağlı: NotStarted/NextUp'tan Reading'e
+        // geçmek gerçek bir başlangıçtır, ama Read veya DidNotFinish'ten Reading'e dönmek yeni bir başlangıç değildir.
+        var previousStatus = userBook.Status;
+
         userBook.Status = newStatus;
 
         // Bitirme tarihi ve favori sadece "Read" durumuna aittir: kitap Read değilse ikisi de temizlenir
@@ -423,19 +460,30 @@ public class UserBookService : IUserBookService
         if (newStatus != ReadingStatus.DidNotFinish)
             userBook.DidNotFinishAt = null;
 
-        // StartedAt hiçbir durumda silinmez, geçmiş başlangıç bilgisi olarak kalır.
+        // Puan ve yorum hiçbir durum geçişinde silinmez (kullanıcı verisi korunur).
         // "??=" -> "null ise ata, doluysa dokunma": tarihler gereksiz yere yeniden yazılmaz
         var now = DateTime.UtcNow;
         switch (newStatus)
         {
+            case ReadingStatus.NotStarted:
+            case ReadingStatus.NextUp:
+                // Henüz başlanmamış / sıradaki kitabın başlangıç tarihi olmaz: her kaynak durumdan temizlenir.
+                // Kitap sonradan tekrar Reading olursa eski tarih geri gelmez, yeni başlangıç atanır.
+                userBook.StartedAt = null;
+                break;
             case ReadingStatus.Reading:
-                userBook.StartedAt ??= now;
+                // Sadece gerçek bir başlangıçta (NotStarted/NextUp -> Reading) ve tarih boşsa atanır.
+                // Read/DidNotFinish -> Reading'de sistem bilinmeyen bir başlangıç tarihi uydurmaz:
+                // StartedAt boşsa boş kalır, doluysa korunur. Reading -> Reading'de hiç dokunulmaz.
+                if (previousStatus is ReadingStatus.NotStarted or ReadingStatus.NextUp)
+                    userBook.StartedAt ??= now;
                 break;
             case ReadingStatus.Read:
                 // Manuel veya otomatik tamamlanma tarih ataması ilgili özel metotlarda yönetilir.
-                // Burada otomatik varsayılan tarih ATANMAZ.
+                // Burada otomatik varsayılan tarih ATANMAZ; StartedAt'e de dokunulmaz.
                 break;
             case ReadingStatus.DidNotFinish:
+                // StartedAt'e dokunulmaz (boşsa boş kalır, doluysa korunur).
                 userBook.DidNotFinishAt ??= now;
                 break;
         }

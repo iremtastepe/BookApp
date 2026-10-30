@@ -37,10 +37,13 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 services.Remove(descriptor);
             }
 
-            // Test için izole InMemory veritabanı ekle
+            // Test için izole InMemory veritabanı ekle.
+            // Her factory (yani her test sınıfı) KENDİ adlı veritabanını kullanır (_dbName = Guid).
+            // Sabit bir ad ("SharedTestDb") kullanılırsa iki test sınıfı paralel çalışırken iki sunucu
+            // aynı veritabanına bağlanır, ikisinin seeder'ı da "Admin" rolünü oluşturur ve rol çift kayıt olur.
             services.AddDbContext<AppDbContext>(options =>
             {
-                options.UseInMemoryDatabase("SharedTestDb", _dbRoot);
+                options.UseInMemoryDatabase(_dbName, _dbRoot);
                 options.UseInternalServiceProvider(_internalProvider);
             });
         });
