@@ -34,10 +34,17 @@ public class UserBook
  
     // Kullanıcının bu kitapta şu an kaçıncı sayfada olduğu (isteğe bağlı ilerleme kaydı)
     // int? (nullable) çünkü sayfa takibi zorunlu değil ve iki farklı durumu ayırmamız gerekiyor:
-    //   null -> kullanıcı ilerleme bilgisi hiç girmemiş
-    //   0    -> kullanıcı ilerleme bilgisi girmiş ama henüz ilk sayfayı geçmemiş
-    // Okuma durumundan (Status) bağımsızdır: bir durumu seçmek için sayfa girmek gerekmez,
-    // sayfa girmek de (bazı koşullar dışında) durumu zorla değiştirmez
+    //   null -> kullanıcı ilerleme bilgisi hiç girmemiş (veya yarım bırakılan okunmuş kitapta bilinmiyor)
+    //   0    -> kullanıcı ilerleme bilgisi girmiş ama henüz ilk sayfayı geçmemiş (ya da yeniden okumaya başlamış)
+    // Durumla ilişkisi (7.4):
+    //   - Bir durumu seçmek için sayfa girmek gerekmez; sayfa girmek de (otomatik NotStarted/NextUp -> Reading
+    //     ve son sayfada otomatik Read dışında) durumu zorla değiştirmez.
+    //   - Read'e geçişte kitabın toplam sayfa sayısı (PageCount) biliniyorsa CurrentPage = PageCount olur;
+    //     PageCount bilinmiyorsa (null/0) CurrentPage mevcut değerini korur, sayı uydurulmaz.
+    //   - Read'den çıkışta: Reading -> 0, NotStarted/NextUp -> 0, DidNotFinish -> null.
+    //     Diğer tüm geçişlerde (Reading -> NextUp, DidNotFinish -> Reading vb.) gerçek ilerleme korunur.
+    //   - Kitap Read durumundayken ve PageCount biliniyorsa ilerleme endpoint'i yalnızca PageCount'a eşit
+    //     değeri kabul eder (küçük/büyük/null değer 400). PageCount bilinmiyorsa ek bir kısıt yoktur.
     public int? CurrentPage { get; set; }
  
     // Kullanıcının bu kitabı okumaya başladığı tarih. Kuralları:

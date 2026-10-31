@@ -145,4 +145,81 @@ public class LibraryStatusTransitionEndpointTests : IClassFixture<CustomWebAppli
         Assert.Null(nextUpBody.StartedAt);
         Assert.Null(nextUpBody.FinishedYear);
     }
+
+    // ---------- 7.4: sayfa sayısı / CurrentPage / durum tutarlılığı ----------
+
+    [Fact]
+    public async Task ReadToReading_ResetsPageToZero_KeepsStartedAt_ClearsFavorite_AndFinishedDate()
+    {
+        var client = await CreateAuthorizedClientAsync("user_pagereset@test.com", "Password123!");
+        var userBook = await AddBookToLibraryAsync(client, "PageReset Book");
+
+        // 120. sayfaya ilerle -> otomatik Reading, StartedAt atanır
+        var progress = await client.PutAsJsonAsync($"/api/library/{userBook.Id}/progress", new UpdateProgressRequest { CurrentPage = 120 });
+        Assert.Equal(HttpStatusCode.OK, progress.StatusCode);
+        var progressBody = await progress.Content.ReadFromJsonAsync<UserBookDto>();
+        Assert.Equal(ReadingStatus.Reading, progressBody!.Status);
+        var originalStart = progressBody.StartedAt;
+        Assert.NotNull(originalStart);
+
+        // Reading -> Read (bugünün tarihi): K1 gereği CurrentPage toplam sayfaya (200) eşitlenir
+        var today = DateTime.UtcNow.Date;
+        var read = await client.PutAsJsonAsync($"/api/library/{userBook.Id}/status", ReadOn(today.Year, today.Month, today.Day));
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        var readBody = await read.Content.ReadFromJsonAsync<UserBookDto>();
+        Assert.Equal(ReadingStatus.Read, readBody!.Status);
+        Assert.Equal(200, readBody.CurrentPage);
+        Assert.Equal(100d, readBody.ProgressPercentage);
+
+        var favorite = await client.PutAsJsonAsync($"/api/library/{userBook.Id}/favorite", new SetFavoriteRequest { IsFavorite = true });
+        Assert.Equal(HttpStatusCode.OK, favorite.StatusCode);
+
+        // Read -> Reading: K2 gereği sayfa 0, başlangıç tarihi aynı, favori ve bitiş tarihi silinir
+        var reading = await client.PutAsJsonAsync($"/api/library/{userBook.Id}/status", new UpdateUserBookStatusRequest { Status = ReadingStatus.Reading });
+        Assert.Equal(HttpStatusCode.OK, reading.StatusCode);
+        var readingBody = await reading.Content.ReadFromJsonAsync<UserBookDto>();
+        Assert.Equal(ReadingStatus.Reading, readingBody!.Status);
+        Assert.Equal(0, readingBody.CurrentPage);
+        Assert.Equal(originalStart, readingBody.StartedAt);
+        Assert.Null(readingBody.FinishedYear);
+        Assert.False(readingBody.IsFavorite);
+    }
+
+    [Fact]
+    public async Task ReadBook_ProgressRules_LowerAndNullReturn400_EqualToPageCountReturns200()
+    {
+        var client = await CreateAuthorizedClientAsync("user_readprogress@test.com", "Password123!");
+        var userBook = await AddBookToLibraryAsync(client, "ReadProgress Book");
+
+        // NotStarted -> Read (tarih bilinmiyor): PageCount (200) biliniyor, CurrentPage 200 olur
+        var read = await client.PutAsJsonAsync($"/api/library/{userBook.Id}/status", new UpdateUserBookStatusRequest
+        {
+            Status = ReadingStatus.Read,
+            FinishedDateUnknown = true
+        });
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        var readBody = await read.Content.ReadFromJsonAsync<UserBookDto>();
+        Assert.Equal(200, readBody!.CurrentPage);
+
+        // Toplam sayfadan düşük değer -> 400, açıklayıcı mesaj
+        var lower = await client.PutAsJsonAsync($"/api/library/{userBook.Id}/progress", new UpdateProgressRequest { CurrentPage = 50 });
+        Assert.Equal(HttpStatusCode.BadRequest, lower.StatusCode);
+        Assert.Contains("Okunuyor", await lower.Content.ReadAsStringAsync());
+
+        // Toplam sayfadan büyük değer -> 400
+        var higher = await client.PutAsJsonAsync($"/api/library/{userBook.Id}/progress", new UpdateProgressRequest { CurrentPage = 201 });
+        Assert.Equal(HttpStatusCode.BadRequest, higher.StatusCode);
+
+        // null (ilerlemeyi temizle) -> 400
+        var nullContent = new StringContent("{\"currentPage\": null}", System.Text.Encoding.UTF8, "application/json");
+        var cleared = await client.PutAsync($"/api/library/{userBook.Id}/progress", nullContent);
+        Assert.Equal(HttpStatusCode.BadRequest, cleared.StatusCode);
+
+        // Toplam sayfaya eşit değer -> 200, kayıt Read olarak kalır
+        var equal = await client.PutAsJsonAsync($"/api/library/{userBook.Id}/progress", new UpdateProgressRequest { CurrentPage = 200 });
+        Assert.Equal(HttpStatusCode.OK, equal.StatusCode);
+        var equalBody = await equal.Content.ReadFromJsonAsync<UserBookDto>();
+        Assert.Equal(ReadingStatus.Read, equalBody!.Status);
+        Assert.Equal(200, equalBody.CurrentPage);
+    }
 }

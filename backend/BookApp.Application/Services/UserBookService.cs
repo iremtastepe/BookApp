@@ -177,6 +177,24 @@ public class UserBookService : IUserBookService
         if (userBook is null)
             throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");
 
+        // 7.4: Read koruması (validation-first, aşağıdaki "null temizle" dalından ÖNCE çalışmalıdır).
+        // Okundu durumunda ve kitabın toplam sayfa sayısı biliniyorsa sayfa ilerlemesi tutarlı tutulur:
+        //   - currentPage == PageCount -> kabul edilir (idempotent; eski, boş kalmış Read kayıtlarını da düzeltir)
+        //   - currentPage <  PageCount -> 400
+        //   - currentPage == null      -> 400 (ilerleme temizlenemez)
+        //   - currentPage >  PageCount -> aşağıdaki mevcut "toplam sayfayı aşamaz" kontrolü 400 verir
+        // Toplam sayfa sayısı bilinmiyorsa (null/0) bu kural uygulanmaz, mevcut davranış korunur.
+        if (userBook.Status == ReadingStatus.Read && userBook.Book.PageCount is > 0)
+        {
+            var readTotalPages = userBook.Book.PageCount.Value;
+
+            if (request.CurrentPage is null)
+                throw new ArgumentException("Okundu durumundaki kitabın sayfa ilerlemesi temizlenemez. Sayfa ilerlemesini değiştirmek için önce kitabı 'Okunuyor' durumuna alın.");
+
+            if (request.CurrentPage.Value < readTotalPages)
+                throw new ArgumentException($"Okundu durumundaki kitabın sayfa ilerlemesi toplam sayfa sayısından ({readTotalPages}) düşük olamaz. Sayfa ilerlemesini değiştirmek için önce kitabı 'Okunuyor' durumuna alın.");
+        }
+
         // null gönderilirse kayıtlı ilerleme temizlenir; okuma durumu değişmez
         if (request.CurrentPage is null)
         {
@@ -436,13 +454,15 @@ public class UserBookService : IUserBookService
     }
 
     // Durum değişikliğinin tek merkezi: hem manuel (status endpoint'i) hem otomatik (progress endpoint'i)
-    // geçişler buradan geçer. Hangi alanın ne olacağı HEDEF duruma göre belirlenir; StartedAt için
-    // ayrıca KAYNAK (önceki) durum de önemlidir.
+    // geçişler buradan geçer. Hangi alanın ne olacağı HEDEF duruma göre belirlenir; StartedAt ve
+    // CurrentPage için ayrıca KAYNAK (önceki) durum de önemlidir.
     private static void ApplyStatusChange(UserBook userBook, ReadingStatus newStatus)
     {
         // Eski durumu, Status üzerine yazılmadan ÖNCE yakalıyoruz.
-        // Çünkü StartedAt kuralı "nereden geliyorsun?" sorusuna bağlı: NotStarted/NextUp'tan Reading'e
-        // geçmek gerçek bir başlangıçtır, ama Read veya DidNotFinish'ten Reading'e dönmek yeni bir başlangıç değildir.
+        // Çünkü bazı kurallar "nereden geliyorsun?" sorusuna bağlı:
+        //   - StartedAt: NotStarted/NextUp'tan Reading'e geçmek gerçek bir başlangıçtır, ama Read veya
+        //     DidNotFinish'ten Reading'e dönmek yeni bir başlangıç değildir.
+        //   - CurrentPage (7.4): sadece Read'den çıkışta sıfırlanır; diğer geçişlerde gerçek ilerleme korunur.
         var previousStatus = userBook.Status;
 
         userBook.Status = newStatus;
@@ -470,6 +490,11 @@ public class UserBookService : IUserBookService
                 // Henüz başlanmamış / sıradaki kitabın başlangıç tarihi olmaz: her kaynak durumdan temizlenir.
                 // Kitap sonradan tekrar Reading olursa eski tarih geri gelmez, yeni başlangıç atanır.
                 userBook.StartedAt = null;
+
+                // 7.4: Okunmuş bir kitap tekrar okunacak listesine dönüyorsa eski "tamamlandı" sayfası kalmaz.
+                // Diğer kaynak durumlarda (Reading, DidNotFinish) gerçek ilerleme korunur.
+                if (previousStatus == ReadingStatus.Read)
+                    userBook.CurrentPage = 0;
                 break;
             case ReadingStatus.Reading:
                 // Sadece gerçek bir başlangıçta (NotStarted/NextUp -> Reading) ve tarih boşsa atanır.
@@ -477,14 +502,32 @@ public class UserBookService : IUserBookService
                 // StartedAt boşsa boş kalır, doluysa korunur. Reading -> Reading'de hiç dokunulmaz.
                 if (previousStatus is ReadingStatus.NotStarted or ReadingStatus.NextUp)
                     userBook.StartedAt ??= now;
+
+                // 7.4: Okunmuş kitap yeniden okunmaya başlıyorsa sayfa ilerlemesi 0'dan başlar.
+                // (DidNotFinish -> Reading'de kullanıcı kaldığı yerden devam eder, sayfa korunur.)
+                if (previousStatus == ReadingStatus.Read)
+                    userBook.CurrentPage = 0;
                 break;
             case ReadingStatus.Read:
+            {
                 // Manuel veya otomatik tamamlanma tarih ataması ilgili özel metotlarda yönetilir.
                 // Burada otomatik varsayılan tarih ATANMAZ; StartedAt'e de dokunulmaz.
+
+                // 7.4: Kitabın toplam sayfa sayısı biliniyorsa okundu kitabın sayfası toplam sayfaya eşitlenir.
+                // Sayfa sayısı bilinmiyorsa (null/0) sayı uydurulmaz, CurrentPage mevcut değerini korur.
+                var pageCount = userBook.Book.PageCount;
+                if (pageCount is > 0)
+                    userBook.CurrentPage = pageCount;
                 break;
+            }
             case ReadingStatus.DidNotFinish:
                 // StartedAt'e dokunulmaz (boşsa boş kalır, doluysa korunur).
                 userBook.DidNotFinishAt ??= now;
+
+                // 7.4: Read'den yarım bırakmaya dönülürse "tamamlandı" sayfası geçersizdir ama gerçek ilerleme
+                // bilinmez: sıfır uydurmak yerine boş (null) bırakılır, kullanıcı isterse kendisi girer.
+                if (previousStatus == ReadingStatus.Read)
+                    userBook.CurrentPage = null;
                 break;
         }
     }

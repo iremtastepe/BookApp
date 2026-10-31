@@ -132,14 +132,15 @@ public partial class ReadingGoalsAndDatesTests
 
     // ---------- K7: NotStarted / NextUp'a dönüş ----------
 
+    // 7.4: Sayfa ilerlemesi yalnızca Read kaynağında 0'a sıfırlanır; Reading ve DidNotFinish kaynağında korunur (40).
     [Theory]
-    [InlineData(ReadingStatus.Reading, ReadingStatus.NotStarted)]
-    [InlineData(ReadingStatus.Reading, ReadingStatus.NextUp)]
-    [InlineData(ReadingStatus.Read, ReadingStatus.NotStarted)]
-    [InlineData(ReadingStatus.Read, ReadingStatus.NextUp)]
-    [InlineData(ReadingStatus.DidNotFinish, ReadingStatus.NotStarted)]
-    [InlineData(ReadingStatus.DidNotFinish, ReadingStatus.NextUp)]
-    public async Task Transition_ToNotStartedOrNextUp_ClearsDatesAndFavorite_KeepsRatingReviewAndPage(ReadingStatus from, ReadingStatus to)
+    [InlineData(ReadingStatus.Reading, ReadingStatus.NotStarted, 40)]
+    [InlineData(ReadingStatus.Reading, ReadingStatus.NextUp, 40)]
+    [InlineData(ReadingStatus.Read, ReadingStatus.NotStarted, 0)]
+    [InlineData(ReadingStatus.Read, ReadingStatus.NextUp, 0)]
+    [InlineData(ReadingStatus.DidNotFinish, ReadingStatus.NotStarted, 40)]
+    [InlineData(ReadingStatus.DidNotFinish, ReadingStatus.NextUp, 40)]
+    public async Task Transition_ToNotStartedOrNextUp_ClearsDatesAndFavorite_KeepsRatingReview_AndAppliesPageRule(ReadingStatus from, ReadingStatus to, int expectedPage)
     {
         var (service, record) = CreateTransitionBook(from);
         record.IsFavorite = true;
@@ -153,10 +154,11 @@ public partial class ReadingGoalsAndDatesTests
         Assert.Null(record.FinishedDay);
         Assert.Null(record.DidNotFinishAt);
         Assert.False(record.IsFavorite);
-        // K4: puan ve yorum korunur, sayfa ilerlemesine dokunulmaz
+        // K4: puan ve yorum korunur
         Assert.Equal(OriginalRating, record.Rating);
         Assert.Equal(OriginalReview, record.Review);
-        Assert.Equal(40, record.CurrentPage);
+        // 7.4: Read'den dönüşte sayfa 0, diğer kaynaklarda mevcut ilerleme korunur
+        Assert.Equal(expectedPage, record.CurrentPage);
     }
 
     // ---------- DidNotFinish geçişleri ----------
