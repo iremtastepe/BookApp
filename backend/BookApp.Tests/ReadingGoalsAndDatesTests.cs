@@ -130,6 +130,8 @@ public partial class ReadingGoalsAndDatesTests
         public Task AddAsync(Book book) => Task.CompletedTask;
         public Task UpdateAsync(Book book) => Task.CompletedTask;
         public Task<int?> GetMaxCurrentPageAsync(int bookId) => Task.FromResult<int?>(null);
+        public Task<int?> GetMaxNonReadCurrentPageAsync(int bookId) => Task.FromResult<int?>(null);
+        public Task<List<UserBook>> GetReadUserBooksByBookIdAsync(int bookId) => Task.FromResult(new List<UserBook>());
         public Task DeleteAsync(Book book) => Task.CompletedTask;
     }
 

@@ -60,7 +60,11 @@ public class BookRepository : IBookRepository
 
     public async Task UpdateAsync(Book book)
     {
-        _context.Books.Update(book);
+        var entry = _context.Entry(book);
+        if (entry.State == EntityState.Detached)
+        {
+            throw new InvalidOperationException("Detached nesneler doğrudan güncellenemez. Güncelleme için izlenen (tracked) entity kullanılmalıdır.");
+        }
         await _context.SaveChangesAsync();
     }
 
@@ -69,6 +73,20 @@ public class BookRepository : IBookRepository
         return await _context.UserBooks
             .Where(ub => ub.BookId == bookId && ub.CurrentPage != null)
             .MaxAsync(ub => (int?)ub.CurrentPage);
+    }
+
+    public async Task<int?> GetMaxNonReadCurrentPageAsync(int bookId)
+    {
+        return await _context.UserBooks
+            .Where(ub => ub.BookId == bookId && ub.Status != BookApp.Domain.Enums.ReadingStatus.Read && ub.CurrentPage != null)
+            .MaxAsync(ub => (int?)ub.CurrentPage);
+    }
+
+    public async Task<List<UserBook>> GetReadUserBooksByBookIdAsync(int bookId)
+    {
+        return await _context.UserBooks
+            .Where(ub => ub.BookId == bookId && ub.Status == BookApp.Domain.Enums.ReadingStatus.Read)
+            .ToListAsync();
     }
 
     public async Task DeleteAsync(Book book)

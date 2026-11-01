@@ -106,7 +106,11 @@ public class UserBookRepository : IUserBookRepository
 
     public Task UpdateAsync(UserBook userBook)
     {
-        _context.UserBooks.Update(userBook);
+        var entry = _context.Entry(userBook);
+        if (entry.State == EntityState.Detached)
+        {
+            throw new InvalidOperationException("Detached nesneler doğrudan güncellenemez. Güncelleme için izlenen (tracked) entity kullanılmalıdır.");
+        }
         return _context.SaveChangesAsync();
     }
 

@@ -87,12 +87,23 @@ public class BookService : IBookService
             }
         }
 
-        if (request.PageCount.HasValue)
+        var isPageCountChanged = book.PageCount != request.PageCount;
+
+        if (isPageCountChanged && request.PageCount.HasValue)
         {
-            var maxCurrentPage = await _repo.GetMaxCurrentPageAsync(id);
-            if (maxCurrentPage.HasValue && request.PageCount.Value < maxCurrentPage.Value)
+            var maxNonReadCurrentPage = await _repo.GetMaxNonReadCurrentPageAsync(id);
+            if (maxNonReadCurrentPage.HasValue && request.PageCount.Value < maxNonReadCurrentPage.Value)
             {
-                throw new InvalidOperationException($"Kitap sayfa sayısı ({request.PageCount.Value}), bu kitabı okuyan kullanıcıların mevcut ilerlemesinden ({maxCurrentPage.Value}) daha az olamaz.");
+                throw new InvalidOperationException($"Kitap sayfa sayısı ({request.PageCount.Value}), bu kitabı okuyan kullanıcıların mevcut ilerlemesinden ({maxNonReadCurrentPage.Value}) daha az olamaz.");
+            }
+
+            if (request.PageCount.Value > 0)
+            {
+                var readUserBooks = await _repo.GetReadUserBooksByBookIdAsync(id);
+                foreach (var ub in readUserBooks)
+                {
+                    ub.CurrentPage = request.PageCount.Value;
+                }
             }
         }
 
@@ -137,7 +148,7 @@ public class BookService : IBookService
         var externalBook = await _lookupService.SearchByIsbnAsync(normalizedIsbn);
         if (externalBook is null)
         {
-                       throw new KeyNotFoundException("Bu ISBN ile eşleşen bir kitap bulunamadı. Kitabı manuel ekleyebilirsiniz.");
+            throw new KeyNotFoundException("Bu ISBN ile eşleşen bir kitap bulunamadı. Kitabı manuel ekleyebilirsiniz.");
         }
 
         var newBook = new Book

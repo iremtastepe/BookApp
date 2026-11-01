@@ -11,5 +11,7 @@ public interface IBookRepository
     Task AddAsync(Book book);
     Task UpdateAsync(Book book);
     Task<int?> GetMaxCurrentPageAsync(int bookId);
+    Task<int?> GetMaxNonReadCurrentPageAsync(int bookId);
+    Task<List<UserBook>> GetReadUserBooksByBookIdAsync(int bookId);
     Task DeleteAsync(Book book);
 }
