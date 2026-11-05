@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using BookApp.Application.DTOs.Books;
 using BookApp.Application.DTOs.Library;
+using BookApp.Application.Exceptions;
 using BookApp.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -66,6 +67,10 @@ public class LibraryController : ControllerBase
         {
             return NotFound(new { message = ex.Message });
         }
+        catch (ArchivedUserBookException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
         catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
@@ -84,6 +89,10 @@ public class LibraryController : ControllerBase
         {
             return NotFound(new { message = ex.Message });
         }
+        catch (ArchivedUserBookException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
         catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
@@ -101,6 +110,10 @@ public class LibraryController : ControllerBase
         catch (KeyNotFoundException ex)
         {
             return NotFound(new { message = ex.Message });
+        }
+        catch (ArchivedUserBookException ex)
+        {
+            return Conflict(new { message = ex.Message });
         }
         catch (ArgumentException ex)
         {
@@ -124,6 +137,10 @@ public class LibraryController : ControllerBase
         {
             return NotFound(new { message = ex.Message });
         }
+        catch (ArchivedUserBookException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
         catch (InvalidOperationException ex)
         {
             return Conflict(new { message = ex.Message });
@@ -145,6 +162,10 @@ public class LibraryController : ControllerBase
         catch (KeyNotFoundException ex)
         {
             return NotFound(new { message = ex.Message });
+        }
+        catch (ArchivedUserBookException ex)
+        {
+            return Conflict(new { message = ex.Message });
         }
         catch (ArgumentException ex)
         {
@@ -172,6 +193,10 @@ public class LibraryController : ControllerBase
         {
             return NotFound(new { message = ex.Message });
         }
+        catch (ArchivedUserBookException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
         catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
@@ -179,6 +204,51 @@ public class LibraryController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Kitabı aktif kitaplıktan arşive kaldırır. Yalnızca arşiv tarihi yazılır; okuma durumu, ilerleme, tarihler,
+    /// puan, yorum ve favori bilgisi aynen korunur. Zaten arşivdeyse 409 döner.
+    /// POST /api/Library/5/archive
+    /// </summary>
+    [HttpPost("{id}/archive")]
+    public async Task<ActionResult<UserBookDto>> Archive(int id)
+    {
+        try
+        {
+            var result = await _userBookService.ArchiveAsync(GetUserId(), id);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Arşivdeki bir kitabı aktif kitaplığa geri getirir. Kitap arşivde değilse 409 döner.
+    /// POST /api/Library/5/restore
+    /// </summary>
+    [HttpPost("{id}/restore")]
+    public async Task<ActionResult<UserBookDto>> Restore(int id)
+    {
+        try
+        {
+            var result = await _userBookService.RestoreAsync(GetUserId(), id);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
         }
     }
 }

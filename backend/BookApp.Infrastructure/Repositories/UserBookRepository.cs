@@ -68,6 +68,12 @@ public class UserBookRepository : IUserBookRepository
             userBooks = userBooks.Where(ub => ub.IsFavorite == isFavorite);
         }
 
+        // 7.1: Arşiv filtresi. Varsayılan (Archived = false) yalnızca aktif kitaplığı, true ise yalnızca arşivi getirir.
+        // CountAsync'ten ÖNCE uygulanır; böylece totalCount da aynı filtreyle hesaplanır.
+        // Yalnızca bu liste sorgusuna eklendi: ExistsAsync, GetByIdWithBookAsync ve istatistik sorguları arşivlileri görmeye devam eder.
+        userBooks = query.Archived
+            ? userBooks.Where(ub => ub.ArchivedAt != null)
+            : userBooks.Where(ub => ub.ArchivedAt == null);
         // Toplam sayı, sayfalamadan ÖNCE hesaplanır: "bu filtreyle toplam kaç kitap var?"
         var total = await userBooks.CountAsync();
 

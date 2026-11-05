@@ -32,5 +32,9 @@ public class UserBookDto
 
     public DateTime AddedAt { get; set; }
     public DateTime? DidNotFinishAt { get; set; }
+
+    // null: kitap aktif kitaplıkta, dolu: kitap arşivde (arşive kaldırıldığı UTC tarih)
+    public DateTime? ArchivedAt { get; set; }
+
     public int? PageCount { get; set; }
 }

@@ -30,7 +30,8 @@ public class StatisticsRepository : IStatisticsRepository
         Rating = ub.Rating!.Value,
         FinishedYear = ub.FinishedYear,
         FinishedMonth = ub.FinishedMonth,
-        FinishedDay = ub.FinishedDay
+        FinishedDay = ub.FinishedDay,
+        ArchivedAt = ub.ArchivedAt
     };
 
     // Kullanıcının "Read" kitapları; year/month verilirse tamamlanma tarihine göre daraltır.

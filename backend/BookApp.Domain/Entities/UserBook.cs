@@ -1,37 +1,37 @@
 using BookApp.Domain.Enums;
- 
+
 namespace BookApp.Domain.Entities;
- 
+
 public class UserBook
 {
     public int Id { get; set; }
- 
+
     // Bu UserBook kaydının hangi kullanıcıya ait olduğunu belirtir (foreign key)
     public int UserId { get; set; }
     public User User { get; set; } = null!;
- 
+
     // Bu UserBook kaydının ortak katalogdaki hangi Book'a bağlı olduğunu belirtir (foreign key)
     // Book'ta UserId yok çünkü Book ortak, kullanıcıya özel her şey burada (UserBook'ta) tutuluyor
     public int BookId { get; set; }
     public Book Book { get; set; } = null!;
- 
+
     // Kullanıcının bu kitapla ilgili okuma durumu (NotStarted, Reading, NextUp, Read, DidNotFinish)
     // Enum çünkü sabit, sonlu ve isimlendirilmiş kategoriler - Rating gibi sürekli bir değer değil
     public ReadingStatus Status { get; set; } = ReadingStatus.NotStarted;
- 
+
     // Kullanıcı bu kitabı favorilerine eklemiş mi
     public bool IsFavorite { get; set; } = false;
- 
+
     // Kullanıcının kitaba verdiği puan, 1-5 arası, 0.5 adımlarla (4.5 gibi) verilebilir
     // decimal çünkü yarım puan istiyoruz; int olsaydı sadece tam sayı (1,2,3,4,5) tutabilirdi
     // nullable çünkü kullanıcı henüz puan vermemiş olabilir (örneğin kitabı bitirmeden önce)
     public decimal? Rating { get; set; }
- 
+
     // Kullanıcının kitabı bitirdikten sonra yazdığı yorum (tek, serbest metin)
     // Sayfa numarasına bağlı notlardan (Note entity) farklı - bu kitaba özel tek bir genel yorum
     // nullable çünkü kullanıcı yorum yazmamış olabilir
     public string? Review { get; set; }
- 
+
     // Kullanıcının bu kitapta şu an kaçıncı sayfada olduğu (isteğe bağlı ilerleme kaydı)
     // int? (nullable) çünkü sayfa takibi zorunlu değil ve iki farklı durumu ayırmamız gerekiyor:
     //   null -> kullanıcı ilerleme bilgisi hiç girmemiş (veya yarım bırakılan okunmuş kitapta bilinmiyor)
@@ -46,7 +46,7 @@ public class UserBook
     //   - Kitap Read durumundayken ve PageCount biliniyorsa ilerleme endpoint'i yalnızca PageCount'a eşit
     //     değeri kabul eder (küçük/büyük/null değer 400). PageCount bilinmiyorsa ek bir kısıt yoktur.
     public int? CurrentPage { get; set; }
- 
+
     // Kullanıcının bu kitabı okumaya başladığı tarih. Kuralları:
     //   - NotStarted ve NextUp durumlarında her zaman null'dır: bu durumlara geçilince temizlenir
     //     (okunmamış/henüz başlanmamış kitabın başlangıç tarihi olmaz).
@@ -58,7 +58,7 @@ public class UserBook
     //   - Kullanıcı Reading, Read ve DidNotFinish durumlarında PUT /api/Library/{id}/started-date
     //     ile tam tarih olarak düzenleyebilir.
     public DateTime? StartedAt { get; set; }
- 
+
     // Kullanıcının bu kitabı bitirdiği takvim yılı, ayı ve günü (Single Source of Truth).
     // Yalnızca Status "Read" olan kitaplarda anlamlıdır. Kısmi tarihleri destekler:
     //   - Yalnızca yıl: FinishedYear dolu, diğerleri null
@@ -68,13 +68,23 @@ public class UserBook
     public int? FinishedYear { get; set; }
     public int? FinishedMonth { get; set; }
     public int? FinishedDay { get; set; }
- 
+
     // Kullanıcının bu kitabı yarıda bıraktığı tarih. Status "DidNotFinish" olunca boşsa set edilir;
     // Status "DidNotFinish" dışına çıkınca temizlenir
     public DateTime? DidNotFinishAt { get; set; }
+
     // Bu kitabın kullanıcının kitaplığına eklendiği tarih
     public DateTime AddedAt { get; set; } = DateTime.UtcNow;
- 
+
+    // Kullanıcının bu kitabı aktif kitaplığından arşive kaldırdığı tarih (UTC) - 7.1.
+    //   null       -> kitap aktif kitaplıkta
+    //   tarih dolu -> kitap arşivde: varsayılan listelerde görünmez, ama okuma durumu, ilerleme, tarihler,
+    //                 puan, yorum, favori bilgisi ve istatistik/yıllık hedefe katkısı aynen korunur.
+    // Arşivleme bir okuma durumu değişikliği DEĞİLDİR: Status'a ve 7.3/7.4 geçiş kurallarına dokunmaz.
+    // Geri yüklenince null'a döner. Ayrı bir bool veya enum değeri yok; "ne zaman" bilgisi de burada.
+    // Nullable olduğu için migration sonrası mevcut tüm kayıtlar otomatik olarak aktif (null) kalır.
+    public DateTime? ArchivedAt { get; set; }
+
     // Bu UserBook'a bağlı sayfa-numaralı notlar (şimdilik kullanılmıyor, ertelenen özellik)
     public ICollection<Note> Notes { get; set; } = new List<Note>();
 }

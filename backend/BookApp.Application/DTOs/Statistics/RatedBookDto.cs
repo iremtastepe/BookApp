@@ -15,4 +15,8 @@ public class RatedBookDto
     public int? FinishedYear { get; set; }
     public int? FinishedMonth { get; set; }
     public int? FinishedDay { get; set; }
+
+    // 7.1: null: kitap aktif kitaplıkta, dolu: kitap arşivde (arşive kaldırıldığı UTC tarih).
+    // Arşivli "Okundu" kitaplar bu listelerde yer almaya devam eder; bu alan yalnızca işaretleme içindir.
+    public DateTime? ArchivedAt { get; set; }
 }

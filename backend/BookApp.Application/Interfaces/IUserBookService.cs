@@ -13,4 +13,6 @@ public interface IUserBookService
     Task<UserBookDto> UpdateProgressAsync(int userId, int userBookId, UpdateProgressRequest request);
     Task<UserBookDto> UpdateFinishedDateAsync(int userId, int userBookId, UpdateFinishedDateRequest request);
     Task<UserBookDto> UpdateStartedDateAsync(int userId, int userBookId, UpdateStartedDateRequest request);
+    Task<UserBookDto> ArchiveAsync(int userId, int userBookId);
+    Task<UserBookDto> RestoreAsync(int userId, int userBookId);
 }

@@ -15,6 +15,11 @@ public class LibraryQuery
     // null: filtre yok, true: sadece favoriler, false: sadece favori olmayanlar
     public bool? IsFavorite { get; set; }
 
+    // false (varsayılan): sadece aktif kitaplıktaki kitaplar, arşivlenmişler gizlenir
+    // true: sadece arşivlenmiş kitaplar. Arama, durum, favori, sıralama ve sayfalama arşiv listesinde de aynen çalışır.
+    // Örnek: ?archived=true
+    public bool Archived { get; set; } = false;
+
     public LibrarySortBy SortBy { get; set; } = LibrarySortBy.AddedAt;
     public LibrarySortDirection SortDir { get; set; } = LibrarySortDirection.Desc;
 

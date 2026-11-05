@@ -206,6 +206,9 @@ namespace BookApp.Infrastructure.Migrations
                     b.Property<DateTime>("AddedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("BookId")
                         .HasColumnType("integer");
 

@@ -89,7 +89,8 @@ public class ReadingGoalService : IReadingGoalService
                 FinishedMonth = ub.FinishedMonth,
                 FinishedDay = ub.FinishedDay,
                 Rating = ub.Rating,
-                Review = ub.Review
+                Review = ub.Review,
+                ArchivedAt = ub.ArchivedAt
             }).ToList()
         };
     }

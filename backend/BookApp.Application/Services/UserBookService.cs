@@ -4,6 +4,7 @@ using BookApp.Application.Helpers;
 using BookApp.Application.Interfaces;
 using BookApp.Domain.Entities;
 using BookApp.Domain.Enums;
+using BookApp.Application.Exceptions;
 
 namespace BookApp.Application.Services;
 
@@ -26,7 +27,7 @@ public class UserBookService : IUserBookService
 
         var alreadyExists = await _userBookRepository.ExistsAsync(userId, request.BookId);
         if (alreadyExists)
-            throw new InvalidOperationException("Bu kitap zaten kütüphanenizde ekli.");
+            throw new InvalidOperationException("Bu kitap zaten kitaplığınızda ekli veya arşivinizde. Arşivdeyse arşiv listenizden geri yükleyebilirsiniz.");
 
         var userBook = new UserBook
         {
@@ -82,6 +83,8 @@ public class UserBookService : IUserBookService
         var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
         if (userBook is null)
             throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");
+
+        EnsureNotArchived(userBook);
 
         // Read dışındaki bir duruma geçiliyorsa tarih parametresi kabul edilmez
         if (request.Status != ReadingStatus.Read)
@@ -176,6 +179,8 @@ public class UserBookService : IUserBookService
         var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
         if (userBook is null)
             throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");
+
+        EnsureNotArchived(userBook);
 
         // 7.4: Read koruması (validation-first, aşağıdaki "null temizle" dalından ÖNCE çalışmalıdır).
         // Okundu durumunda ve kitabın toplam sayfa sayısı biliniyorsa sayfa ilerlemesi tutarlı tutulur:
@@ -307,6 +312,8 @@ public class UserBookService : IUserBookService
         if (userBook is null)
             throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");
 
+        EnsureNotArchived(userBook);
+
         if (userBook.Status != ReadingStatus.Read)
             throw new InvalidOperationException("Yalnızca 'Okundu' (Read) durumundaki kitapların bitiş tarihi güncellenebilir.");
 
@@ -362,6 +369,8 @@ public class UserBookService : IUserBookService
         var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
         if (userBook is null)
             throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");
+
+        EnsureNotArchived(userBook);
 
         // 3. Durum kontrolü: yalnızca Reading, Read veya DidNotFinish durumunda başlangıç tarihi girilebilir
         if (userBook.Status is ReadingStatus.NotStarted or ReadingStatus.NextUp)
@@ -423,6 +432,8 @@ public class UserBookService : IUserBookService
         if (userBook is null)
             throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");
 
+        EnsureNotArchived(userBook);
+
         if (userBook.Status is not (ReadingStatus.Read or ReadingStatus.DidNotFinish))
             throw new InvalidOperationException("Yalnızca 'Okundu' veya 'Yarım Bırakıldı' durumundaki kitaplara puan veya yorum eklenebilir.");
 
@@ -443,6 +454,8 @@ public class UserBookService : IUserBookService
         if (userBook is null)
             throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");
 
+        EnsureNotArchived(userBook);
+
         if (request.IsFavorite && userBook.Status != ReadingStatus.Read)
             throw new InvalidOperationException("Yalnızca 'Okundu' (Read) durumundaki kitaplar favorilere eklenebilir.");
 
@@ -451,6 +464,48 @@ public class UserBookService : IUserBookService
         await _userBookRepository.UpdateAsync(userBook);
 
         return MapToDto(userBook);
+    }
+
+    // 7.1: Arşivleme bir okuma durumu değişikliği DEĞİLDİR. ApplyStatusChange çağrılmaz;
+    // yalnızca ArchivedAt yazılır, diğer tüm alanlar (durum, tarihler, puan, yorum, favori, ilerleme) aynen kalır.
+    public async Task<UserBookDto> ArchiveAsync(int userId, int userBookId)
+    {
+        var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
+        if (userBook is null)
+            throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");
+
+        if (userBook.ArchivedAt is not null)
+            throw new InvalidOperationException("Bu kitap zaten arşivde.");
+
+        userBook.ArchivedAt = DateTime.UtcNow;
+
+        await _userBookRepository.UpdateAsync(userBook);
+
+        return MapToDto(userBook);
+    }
+
+    public async Task<UserBookDto> RestoreAsync(int userId, int userBookId)
+    {
+        var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
+        if (userBook is null)
+            throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");
+
+        if (userBook.ArchivedAt is null)
+            throw new InvalidOperationException("Bu kitap arşivde değil.");
+
+        userBook.ArchivedAt = null;
+
+        await _userBookRepository.UpdateAsync(userBook);
+
+        return MapToDto(userBook);
+    }
+
+    // 7.1: Arşivli kayıtlar salt okunurdur; değiştirmek için önce geri yüklenmelidir.
+    // ArchivedAt null ise hiçbir şey yapmaz, mevcut davranış birebir korunur.
+    private static void EnsureNotArchived(UserBook userBook)
+    {
+        if (userBook.ArchivedAt is not null)
+            throw new ArchivedUserBookException("Bu kitap arşivde olduğu için güncellenemez. Önce arşivden geri yükleyin.");
     }
 
     // Durum değişikliğinin tek merkezi: hem manuel (status endpoint'i) hem otomatik (progress endpoint'i)
@@ -551,7 +606,8 @@ public class UserBookService : IUserBookService
         FinishedMonth = userBook.FinishedMonth,
         FinishedDay = userBook.FinishedDay,
         DidNotFinishAt = userBook.DidNotFinishAt,
-        AddedAt = userBook.AddedAt
+        AddedAt = userBook.AddedAt,
+        ArchivedAt = userBook.ArchivedAt
     };
 
     private static double? CalculateProgressPercentage(UserBook userBook)

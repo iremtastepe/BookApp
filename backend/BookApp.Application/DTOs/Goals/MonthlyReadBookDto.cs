@@ -19,4 +19,8 @@ public class MonthlyReadBookDto
 
     public decimal? Rating { get; set; }
     public string? Review { get; set; }
+
+    // 7.1: null: kitap aktif kitaplıkta, dolu: kitap arşivde (arşive kaldırıldığı UTC tarih).
+    // Arşivli "Okundu" kitaplar aylık listede ve sayıda yer almaya devam eder; bu alan yalnızca işaretleme içindir.
+    public DateTime? ArchivedAt { get; set; }
 }
