@@ -35,6 +35,9 @@ public class UserBookService : IUserBookService
             BookId = request.BookId,
             Status = ReadingStatus.NotStarted,
             IsFavorite = false,
+            PageCount = (book.PageCount is > 0 and <= 10000)
+                ? book.PageCount
+                : null,
             AddedAt = DateTime.UtcNow,
             Book = book
         };
@@ -183,15 +186,15 @@ public class UserBookService : IUserBookService
         EnsureNotArchived(userBook);
 
         // 7.4: Read koruması (validation-first, aşağıdaki "null temizle" dalından ÖNCE çalışmalıdır).
-        // Okundu durumunda ve kitabın toplam sayfa sayısı biliniyorsa sayfa ilerlemesi tutarlı tutulur:
+        // Okundu durumunda ve kullanıcının kişisel toplam sayfa sayısı biliniyorsa sayfa ilerlemesi tutarlı tutulur:
         //   - currentPage == PageCount -> kabul edilir (idempotent; eski, boş kalmış Read kayıtlarını da düzeltir)
         //   - currentPage <  PageCount -> 400
         //   - currentPage == null      -> 400 (ilerleme temizlenemez)
         //   - currentPage >  PageCount -> aşağıdaki mevcut "toplam sayfayı aşamaz" kontrolü 400 verir
         // Toplam sayfa sayısı bilinmiyorsa (null/0) bu kural uygulanmaz, mevcut davranış korunur.
-        if (userBook.Status == ReadingStatus.Read && userBook.Book.PageCount is > 0)
+        if (userBook.Status == ReadingStatus.Read && userBook.PageCount is > 0)
         {
-            var readTotalPages = userBook.Book.PageCount.Value;
+            var readTotalPages = userBook.PageCount.Value;
 
             if (request.CurrentPage is null)
                 throw new ArgumentException("Okundu durumundaki kitabın sayfa ilerlemesi temizlenemez. Sayfa ilerlemesini değiştirmek için önce kitabı 'Okunuyor' durumuna alın.");
@@ -213,7 +216,7 @@ public class UserBookService : IUserBookService
         if (newPage < 0)
             throw new ArgumentException("Sayfa numarası negatif olamaz.");
 
-        var totalPages = userBook.Book.PageCount;
+        var totalPages = userBook.PageCount;
         var isTotalPagesKnown = totalPages is > 0;
 
         if (isTotalPagesKnown && newPage > totalPages)
@@ -500,6 +503,44 @@ public class UserBookService : IUserBookService
         return MapToDto(userBook);
     }
 
+    public async Task<UserBookDto> UpdatePageCountAsync(int userId, int userBookId, UpdateUserBookPageCountRequest request)
+    {
+        var userBook = await _userBookRepository.GetByIdWithBookAsync(userBookId, userId);
+        if (userBook is null)
+            throw new KeyNotFoundException("Kitaplık kaydı bulunamadı.");
+
+        EnsureNotArchived(userBook);
+
+        if (request.PageCount.HasValue)
+        {
+            if (request.PageCount.Value < 1 || request.PageCount.Value > 10000)
+            {
+                throw new ArgumentException("Sayfa sayısı 1 ile 10000 arasında olmalı veya boş bırakılmalıdır.");
+            }
+
+            if (userBook.Status == ReadingStatus.Reading && userBook.CurrentPage.HasValue && userBook.CurrentPage.Value > request.PageCount.Value)
+            {
+                throw new ArgumentException($"Yeni sayfa sayısı ({request.PageCount.Value}), mevcut ilerlemenizden ({userBook.CurrentPage.Value}) daha az olamaz.");
+            }
+
+            userBook.PageCount = request.PageCount.Value;
+
+            if (userBook.Status == ReadingStatus.Read)
+            {
+                userBook.CurrentPage = request.PageCount.Value;
+            }
+        }
+        else
+        {
+            // PageCount null yapılıyor (sayfa sayısı bilinmiyor)
+            userBook.PageCount = null;
+            // Not: Status Read olsa bile sahte değer atanmaz veya silinmez, CurrentPage mevcut değerini korur
+        }
+
+        await _userBookRepository.UpdateAsync(userBook);
+        return MapToDto(userBook);
+    }
+
     // 7.1: Arşivli kayıtlar salt okunurdur; değiştirmek için önce geri yüklenmelidir.
     // ArchivedAt null ise hiçbir şey yapmaz, mevcut davranış birebir korunur.
     private static void EnsureNotArchived(UserBook userBook)
@@ -568,9 +609,9 @@ public class UserBookService : IUserBookService
                 // Manuel veya otomatik tamamlanma tarih ataması ilgili özel metotlarda yönetilir.
                 // Burada otomatik varsayılan tarih ATANMAZ; StartedAt'e de dokunulmaz.
 
-                // 7.4: Kitabın toplam sayfa sayısı biliniyorsa okundu kitabın sayfası toplam sayfaya eşitlenir.
+                // 7.4 / Asama 2: Kullanıcının toplam sayfa sayısı biliniyorsa okundu kitabın sayfası toplam sayfaya eşitlenir.
                 // Sayfa sayısı bilinmiyorsa (null/0) sayı uydurulmaz, CurrentPage mevcut değerini korur.
-                var pageCount = userBook.Book.PageCount;
+                var pageCount = userBook.PageCount;
                 if (pageCount is > 0)
                     userBook.CurrentPage = pageCount;
                 break;
@@ -599,7 +640,7 @@ public class UserBookService : IUserBookService
         Rating = userBook.Rating,
         Review = userBook.Review,
         CurrentPage = userBook.CurrentPage,
-        PageCount = userBook.Book.PageCount,
+        PageCount = userBook.PageCount,
         ProgressPercentage = CalculateProgressPercentage(userBook),
         StartedAt = userBook.StartedAt,
         FinishedYear = userBook.FinishedYear,
@@ -615,7 +656,7 @@ public class UserBookService : IUserBookService
         if (userBook.Status == ReadingStatus.Read)
             return 100;
 
-        var pageCount = userBook.Book.PageCount;
+        var pageCount = userBook.PageCount;
         if (pageCount is null or <= 0 || userBook.CurrentPage is null)
             return null;
 

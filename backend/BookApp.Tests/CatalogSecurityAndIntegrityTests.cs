@@ -160,7 +160,7 @@ public class CatalogSecurityAndIntegrityTests : IClassFixture<CustomWebApplicati
     }
 
     [Fact]
-    public async Task Scenario4_Admin_PutWithInvalidPageCountBelowCurrentPage_Returns409Conflict()
+    public async Task Scenario4_Admin_PutPageCount_DoesNotConflictWithUserProgress_Returns200Ok()
     {
         var (normalClient, _, _) = await CreateUserWithRoleAsync("normal_reader@test.com", "Password123!", null);
         var createResponse = await normalClient.PostAsJsonAsync("/api/books", new CreateBookRequest
@@ -186,7 +186,8 @@ public class CatalogSecurityAndIntegrityTests : IClassFixture<CustomWebApplicati
         });
         updateProgressResponse.EnsureSuccessStatusCode();
 
-        // Admin sayfa sayısını 250'ye düşürmeye çalışır -> 409 dönmeli
+        // Yeni Ürün Kararı (Aşama 2): Admin ortak katalog sayfa sayısını 250'ye düşürdüğünde,
+        // kullanıcının kişisel UserBook verileri etkilenmez ve admin engellenmez (200 OK döner).
         var (adminClient, _, _) = await CreateUserWithRoleAsync("admin_user2@test.com", "AdminPass123!", "Admin");
         var putResponse = await adminClient.PutAsJsonAsync($"/api/books/{createdBook.Id}", new UpdateBookRequest
         {
@@ -195,9 +196,16 @@ public class CatalogSecurityAndIntegrityTests : IClassFixture<CustomWebApplicati
             PageCount = 250
         });
 
-        Assert.Equal(HttpStatusCode.Conflict, putResponse.StatusCode);
-        var errorContent = await putResponse.Content.ReadAsStringAsync();
-        Assert.Contains("350", errorContent);
+        Assert.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+        var updated = await putResponse.Content.ReadFromJsonAsync<BookResponse>();
+        Assert.Equal(250, updated!.PageCount);
+
+        // Kullanıcının kişisel verisi (CurrentPage=350 ve PageCount=400) bozulmadan kalır
+        var freshUbRes = await normalClient.GetAsync("/api/library");
+        var pagedLib = await freshUbRes.Content.ReadFromJsonAsync<PagedResponse<UserBookDto>>();
+        var userBookFresh = pagedLib!.Items.First(x => x.Id == userBook.Id);
+        Assert.Equal(350, userBookFresh.CurrentPage);
+        Assert.Equal(400, userBookFresh.PageCount);
     }
 
     [Fact]

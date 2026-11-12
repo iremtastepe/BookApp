@@ -77,7 +77,7 @@ public class AdminPageCountConsistencyTests : IClassFixture<CustomWebApplication
             BookId = ub.BookId,
             Status = ub.Status,
             CurrentPage = ub.CurrentPage,
-            PageCount = ub.Book.PageCount,
+            PageCount = ub.PageCount,
             Rating = ub.Rating,
             Review = ub.Review,
             IsFavorite = ub.IsFavorite,
@@ -96,9 +96,9 @@ public class AdminPageCountConsistencyTests : IClassFixture<CustomWebApplication
         return await db.Books.AsNoTracking().FirstAsync(b => b.Id == bookId);
     }
 
-    // 1. null -> 300: Read.CurrentPage 350 olsa bile 300'e eşitlenmeli.
+    // 1. null -> 300: Yeni modelde admin katalog PageCount'u degistirse bile kullanicinin UserBook.CurrentPage'i degismez.
     [Fact]
-    public async Task Test1_PageCount_NullTo300_SyncsReadCurrentPageEvenIfHigher()
+    public async Task Test1_PageCount_NullTo300_DoesNotChangeUserCurrentPage()
     {
         var (adminClient, _, _) = await CreateUserWithRoleAsync("admin_t1@test.com", "AdminPass123!", "Admin");
         var (userClient, _, _) = await CreateUserWithRoleAsync("user_t1@test.com", "UserPass123!", null);
@@ -130,12 +130,12 @@ public class AdminPageCountConsistencyTests : IClassFixture<CustomWebApplication
         Assert.Equal(HttpStatusCode.OK, putRes.StatusCode);
 
         var freshUb = await GetUserBookDirectAsync(ub.Id);
-        Assert.Equal(300, freshUb.CurrentPage);
+        Assert.Equal(350, freshUb.CurrentPage);
     }
 
-    // 2. 300 -> 400: Bütün Read kayıtları güncellenmeli.
+    // 2. 300 -> 400: Admin katalog sayfasını degistirdiginde kullanicinin mevcut Read kaydı degismez.
     [Fact]
-    public async Task Test2_PageCount_300To400_UpdatesAllReadRecords()
+    public async Task Test2_PageCount_300To400_DoesNotAlterExistingReadRecords()
     {
         var (adminClient, _, _) = await CreateUserWithRoleAsync("admin_t2@test.com", "AdminPass123!", "Admin");
         var (userClient, _, _) = await CreateUserWithRoleAsync("user_t2@test.com", "UserPass123!", null);
@@ -166,12 +166,12 @@ public class AdminPageCountConsistencyTests : IClassFixture<CustomWebApplication
         Assert.Equal(HttpStatusCode.OK, putRes.StatusCode);
 
         var freshUb = await GetUserBookDirectAsync(ub.Id);
-        Assert.Equal(400, freshUb.CurrentPage);
+        Assert.Equal(300, freshUb.CurrentPage);
     }
 
-    // 3. 400 -> 250: Read kayıtları küçültülebilmeli.
+    // 3. 400 -> 250: Admin katalog sayfasını 250 yapsa bile kullanicinin 400 olan Read kaydı korunur.
     [Fact]
-    public async Task Test3_PageCount_400To250_ReducesReadRecords()
+    public async Task Test3_PageCount_400To250_DoesNotReduceReadRecords()
     {
         var (adminClient, _, _) = await CreateUserWithRoleAsync("admin_t3@test.com", "AdminPass123!", "Admin");
         var (userClient, _, _) = await CreateUserWithRoleAsync("user_t3@test.com", "UserPass123!", null);
@@ -202,12 +202,12 @@ public class AdminPageCountConsistencyTests : IClassFixture<CustomWebApplication
         Assert.Equal(HttpStatusCode.OK, putRes.StatusCode);
 
         var freshUb = await GetUserBookDirectAsync(ub.Id);
-        Assert.Equal(250, freshUb.CurrentPage);
+        Assert.Equal(400, freshUb.CurrentPage);
     }
 
-    // 4. Reading kullanıcısı sınırı aşıyorsa 409.
+    // 4. Reading kullanıcısı mevcuttan yüksek ilerlemeye sahip olsa bile admin güncellemesi engellenmez (200 OK döner).
     [Fact]
-    public async Task Test4_ReadingUserExceedsNewLimit_Returns409Conflict()
+    public async Task Test4_ReadingUserProgress_DoesNotBlockAdminUpdate_Returns200Ok()
     {
         var (adminClient, _, _) = await CreateUserWithRoleAsync("admin_t4@test.com", "AdminPass123!", "Admin");
         var (userClient, _, _) = await CreateUserWithRoleAsync("user_t4@test.com", "UserPass123!", null);
@@ -231,12 +231,18 @@ public class AdminPageCountConsistencyTests : IClassFixture<CustomWebApplication
             Author = book.Author,
             PageCount = 250
         });
-        Assert.Equal(HttpStatusCode.Conflict, putRes.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, putRes.StatusCode);
+
+        var freshBook = await GetBookDirectAsync(book.Id);
+        Assert.Equal(250, freshBook.PageCount);
+
+        var freshUb = await GetUserBookDirectAsync(ub.Id);
+        Assert.Equal(280, freshUb.CurrentPage);
     }
 
-    // 5. DidNotFinish kullanıcısı sınırı aşıyorsa 409.
+    // 5. DidNotFinish kullanıcısının ilerlemesi adminin sayfa sayısı güncellemesini engellemez (200 OK döner).
     [Fact]
-    public async Task Test5_DidNotFinishUserExceedsNewLimit_Returns409Conflict()
+    public async Task Test5_DidNotFinishUserProgress_DoesNotBlockAdminUpdate_Returns200Ok()
     {
         var (adminClient, _, _) = await CreateUserWithRoleAsync("admin_t5@test.com", "AdminPass123!", "Admin");
         var (userClient, _, _) = await CreateUserWithRoleAsync("user_t5@test.com", "UserPass123!", null);
@@ -264,7 +270,13 @@ public class AdminPageCountConsistencyTests : IClassFixture<CustomWebApplication
             Author = book.Author,
             PageCount = 250
         });
-        Assert.Equal(HttpStatusCode.Conflict, putRes.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, putRes.StatusCode);
+
+        var freshBook = await GetBookDirectAsync(book.Id);
+        Assert.Equal(250, freshBook.PageCount);
+
+        var freshUb = await GetUserBookDirectAsync(ub.Id);
+        Assert.Equal(280, freshUb.CurrentPage);
     }
 
     // 6. Alt sınırla eşit değer kabul edilmeli.
@@ -419,9 +431,9 @@ public class AdminPageCountConsistencyTests : IClassFixture<CustomWebApplication
         Assert.Equal(150, freshUb.CurrentPage);
     }
 
-    // 11. Birden fazla kullanıcıya ait Read kayıtları birlikte eşitlenmeli.
+    // 11. Birden fazla kullanıcıya ait Read kayıtları admin katalog güncellemesinden etkilenmez.
     [Fact]
-    public async Task Test11_MultipleReadUsers_AllSyncedTogether()
+    public async Task Test11_MultipleReadUsers_NotAlteredByAdminPageCount()
     {
         var (adminClient, _, _) = await CreateUserWithRoleAsync("admin_t11@test.com", "AdminPass123!", "Admin");
         var (user1Client, _, _) = await CreateUserWithRoleAsync("user1_t11@test.com", "UserPass123!", null);
@@ -461,8 +473,8 @@ public class AdminPageCountConsistencyTests : IClassFixture<CustomWebApplication
 
         var freshUb1 = await GetUserBookDirectAsync(ub1.Id);
         var freshUb2 = await GetUserBookDirectAsync(ub2.Id);
-        Assert.Equal(450, freshUb1.CurrentPage);
-        Assert.Equal(450, freshUb2.CurrentPage);
+        Assert.Equal(300, freshUb1.CurrentPage);
+        Assert.Equal(300, freshUb2.CurrentPage);
     }
 
     // 12. Başka BookId'ye ait kayıtlar korunmalı.
@@ -546,7 +558,7 @@ public class AdminPageCountConsistencyTests : IClassFixture<CustomWebApplication
         Assert.Equal(HttpStatusCode.OK, putRes.StatusCode);
 
         var freshUb = await GetUserBookDirectAsync(ub.Id);
-        Assert.Equal(350, freshUb.CurrentPage);
+        Assert.Equal(300, freshUb.CurrentPage);
         Assert.Equal(4.5m, freshUb.Rating);
         Assert.Equal("Harika bir kitap", freshUb.Review);
         Assert.True(freshUb.IsFavorite);
@@ -556,16 +568,16 @@ public class AdminPageCountConsistencyTests : IClassFixture<CustomWebApplication
         Assert.NotNull(freshUb.StartedAt);
     }
 
-    // 14. 409 sonrasında Book ve UserBook verileri değişmemeli.
+    // 14. Admin katalog guncellemesi (200 OK) Book guncellenir, kullanicinin UserBook ilerlemesi korunur.
     [Fact]
-    public async Task Test14_After409Conflict_BookAndUserBookAreUnchanged()
+    public async Task Test14_AdminUpdate_UpdatesBookAndPreservesUserBook()
     {
         var (adminClient, _, _) = await CreateUserWithRoleAsync("admin_t14@test.com", "AdminPass123!", "Admin");
         var (userClient, _, _) = await CreateUserWithRoleAsync("user_t14@test.com", "UserPass123!", null);
 
         var createBookRes = await adminClient.PostAsJsonAsync("/api/books", new CreateBookRequest
         {
-            Title = "Conflict Rollback Book",
+            Title = "Independent Book",
             Author = "Author T14",
             PageCount = 400
         });
@@ -582,14 +594,15 @@ public class AdminPageCountConsistencyTests : IClassFixture<CustomWebApplication
             Author = "Modified Author Attempt",
             PageCount = 200
         });
-        Assert.Equal(HttpStatusCode.Conflict, putRes.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, putRes.StatusCode);
 
         var freshBook = await GetBookDirectAsync(book.Id);
-        Assert.Equal(400, freshBook.PageCount);
-        Assert.Equal("Conflict Rollback Book", freshBook.Title);
+        Assert.Equal(200, freshBook.PageCount);
+        Assert.Equal("Modified Title Attempt", freshBook.Title);
 
         var freshUb = await GetUserBookDirectAsync(ub.Id);
         Assert.Equal(280, freshUb.CurrentPage);
+        Assert.Equal(400, freshUb.PageCount);
     }
 
     // 15. ISBN doğrulama ve çakışma davranışları korunmalı.

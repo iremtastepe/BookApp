@@ -15,4 +15,5 @@ public interface IUserBookService
     Task<UserBookDto> UpdateStartedDateAsync(int userId, int userBookId, UpdateStartedDateRequest request);
     Task<UserBookDto> ArchiveAsync(int userId, int userBookId);
     Task<UserBookDto> RestoreAsync(int userId, int userBookId);
+    Task<UserBookDto> UpdatePageCountAsync(int userId, int userBookId, UpdateUserBookPageCountRequest request);
 }

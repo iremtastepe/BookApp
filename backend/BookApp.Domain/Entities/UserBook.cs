@@ -85,6 +85,9 @@ public class UserBook
     // Nullable olduğu için migration sonrası mevcut tüm kayıtlar otomatik olarak aktif (null) kalır.
     public DateTime? ArchivedAt { get; set; }
 
+    // Kullanıcının sahip olduğu nüshanın bağımsız sayfa sayısı (ortak katalogdan bağımsız yönetilir)
+    public int? PageCount { get; set; }
+
     // Bu UserBook'a bağlı sayfa-numaralı notlar (şimdilik kullanılmıyor, ertelenen özellik)
     public ICollection<Note> Notes { get; set; } = new List<Note>();
 }

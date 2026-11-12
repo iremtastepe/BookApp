@@ -226,6 +226,7 @@ public partial class ReadingGoalsAndDatesTests
             BookId = 1,
             Status = ReadingStatus.Reading,
             CurrentPage = 50,
+            PageCount = 100,
             Book = new Book { Id = 1, Title = "A", Author = "B", PageCount = 100 }
         };
         repo.Books.Add(ub);

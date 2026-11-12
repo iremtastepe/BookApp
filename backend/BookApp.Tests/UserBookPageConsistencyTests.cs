@@ -19,6 +19,7 @@ public partial class ReadingGoalsAndDatesTests
         var (service, record) = CreateServiceWithBook(status);
         record.CurrentPage = currentPage;
         record.Book.PageCount = pageCount;
+        record.PageCount = pageCount;
 
         if (status is not (ReadingStatus.NotStarted or ReadingStatus.NextUp))
             record.StartedAt = TrUtc(2024, 1, 10);

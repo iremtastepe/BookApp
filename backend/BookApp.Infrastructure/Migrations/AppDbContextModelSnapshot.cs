@@ -230,6 +230,9 @@ namespace BookApp.Infrastructure.Migrations
                     b.Property<bool>("IsFavorite")
                         .HasColumnType("boolean");
 
+                    b.Property<int?>("PageCount")
+                        .HasColumnType("integer");
+
                     b.Property<decimal?>("Rating")
                         .HasPrecision(2, 1)
                         .HasColumnType("numeric(2,1)");

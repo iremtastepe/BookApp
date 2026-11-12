@@ -251,4 +251,30 @@ public class LibraryController : ControllerBase
             return Conflict(new { message = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Kullanıcının kendi kütüphanesindeki nüshanın sayfa sayısını günceller veya bilinmiyor (null) yapar.
+    /// PUT /api/Library/5/page-count
+    /// </summary>
+    [HttpPut("{id}/page-count")]
+    public async Task<ActionResult<UserBookDto>> UpdatePageCount(int id, UpdateUserBookPageCountRequest request)
+    {
+        try
+        {
+            var result = await _userBookService.UpdatePageCountAsync(GetUserId(), id, request);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (ArchivedUserBookException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }

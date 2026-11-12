@@ -413,14 +413,15 @@ public class ArchiveUserBookEndpointTests : IClassFixture<CustomWebApplicationFa
  
         Assert.Equal(HttpStatusCode.OK, putRes.StatusCode);
         var after = await SnapshotAsync(userBookId);
-        Assert.Equal(300, after.CurrentPage);
+        // Yeni mimaride admin katalog sayfasını değiştirse bile arşivli kullanıcının kendi CurrentPage'i (200) korunur.
+        Assert.Equal(200, after.CurrentPage);
         Assert.Equal(4.5m, after.Rating);
         Assert.True(after.IsFavorite);
         Assert.Equal(archivedAtBefore, await GetArchivedAtAsync(userBookId));
     }
  
     [Fact]
-    public async Task AdminPageCountBelowArchivedReadingRecord_Returns409AndChangesNothing()
+    public async Task AdminPageCountBelowArchivedReadingRecord_DoesNotBlockAdminUpdate_Returns200Ok()
     {
         var admin = await CreateUserClientAsync("arch5_admin_limit@test.com", "Admin");
         var user = await CreateUserClientAsync("arch5_user_limit@test.com");
@@ -428,6 +429,7 @@ public class ArchiveUserBookEndpointTests : IClassFixture<CustomWebApplicationFa
         await ArchiveDirectAsync(userBookId);
         var snapshotBefore = await SnapshotAsync(userBookId);
  
+        // Admin katalog sayfa sayısını 40 yapar; yeni modelde kullanıcının ilerlemesi admini engellemez (200 OK döner)
         var putRes = await admin.PutAsJsonAsync($"/api/books/{book.Id}", new UpdateBookRequest
         {
             Title = book.Title,
@@ -435,13 +437,13 @@ public class ArchiveUserBookEndpointTests : IClassFixture<CustomWebApplicationFa
             PageCount = 40
         });
  
-        Assert.Equal(HttpStatusCode.Conflict, putRes.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, putRes.StatusCode);
         Assert.Equal(snapshotBefore, await SnapshotAsync(userBookId));
  
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var freshBook = await db.Books.AsNoTracking().FirstAsync(b => b.Id == book.Id);
-        Assert.Equal(200, freshBook.PageCount);
+        Assert.Equal(40, freshBook.PageCount);
     }
  
     [Fact]

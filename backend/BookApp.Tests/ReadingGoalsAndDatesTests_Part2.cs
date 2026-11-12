@@ -280,6 +280,7 @@ public partial class ReadingGoalsAndDatesTests
             Status = ReadingStatus.NotStarted,
             StartedAt = null,
             CurrentPage = null,
+            PageCount = 300,
             Book = new Book { Title = "Geçmiş Okuma", Author = "Yazar", PageCount = 300 }
         };
         repo.Books.Add(ub);
@@ -346,6 +347,7 @@ public partial class ReadingGoalsAndDatesTests
             Status = ReadingStatus.Reading,
             StartedAt = existingStart,
             CurrentPage = 100,
+            PageCount = 200,
             Book = new Book { Title = "Biten Kitap", Author = "Yazar", PageCount = 200 }
         };
         repo.Books.Add(ub);
@@ -379,6 +381,7 @@ public partial class ReadingGoalsAndDatesTests
             Status = ReadingStatus.Reading,
             StartedAt = new DateTime(2024, 5, 10, 0, 0, 0, DateTimeKind.Utc),
             CurrentPage = 50,
+            PageCount = 100,
             Book = new Book { Title = "Test", Author = "Yazar", PageCount = 100 }
         };
         repo.Books.Add(ub);
@@ -416,6 +419,7 @@ public partial class ReadingGoalsAndDatesTests
             Status = ReadingStatus.Reading,
             StartedAt = tomorrowUtc,
             CurrentPage = 90,
+            PageCount = 100,
             Book = new Book { Title = "Tolerans Kitabı", Author = "Yazar", PageCount = 100 }
         };
         repo.Books.Add(ub);
