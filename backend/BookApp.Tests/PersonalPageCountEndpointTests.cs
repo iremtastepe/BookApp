@@ -1,3 +1,4 @@
+
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -130,7 +131,7 @@ public class PersonalPageCountEndpointTests : IClassFixture<CustomWebApplication
         Assert.Equal(360, updatedB!.PageCount);
     }
 
-    // 4. PUT /api/library/{id}/page-count: Geçersiz değerler (0 veya negatif veya >10000) 400 döner
+    // 4. Geçersiz PageCount değerleri 400 döner
     [Theory]
     [InlineData(0)]
     [InlineData(-5)]
@@ -188,7 +189,7 @@ public class PersonalPageCountEndpointTests : IClassFixture<CustomWebApplication
         Assert.Equal(100, updated.ProgressPercentage);
     }
 
-    // 7. PageCount açıkça null yapıldığında: CurrentPage korunur, sahte değer türetilmez
+    // 7. PageCount açıkça null yapıldığında CurrentPage korunur
     [Fact]
     public async Task UpdatePageCount_SetToNull_PreservesCurrentPage_AndPageCountIsNull()
     {
@@ -208,7 +209,7 @@ public class PersonalPageCountEndpointTests : IClassFixture<CustomWebApplication
         Assert.Null(updated.ProgressPercentage);
     }
 
-    // 8. Başka bir kullanıcının UserBook kaydını güncellemeye çalışmak 404 döner
+    // 8. Başka kullanıcının UserBook kaydını güncellemek 404 döner
     [Fact]
     public async Task UpdatePageCount_OtherUsersRecord_Returns404NotFound()
     {
@@ -223,7 +224,7 @@ public class PersonalPageCountEndpointTests : IClassFixture<CustomWebApplication
         Assert.Equal(HttpStatusCode.NotFound, putRes.StatusCode);
     }
 
-    // 9. Arşivlenmiş bir kitabın PageCount'u güncellenemez (409 Conflict)
+    // 9. Arşivli kitabın PageCount'u güncellenemez
     [Fact]
     public async Task UpdatePageCount_ArchivedUserBook_Returns409Conflict()
     {
@@ -239,7 +240,7 @@ public class PersonalPageCountEndpointTests : IClassFixture<CustomWebApplication
         Assert.Equal(HttpStatusCode.Conflict, putRes.StatusCode);
     }
 
-    // 10. Admin Book.PageCount değiştirdiğinde kullanıcının UserBook.PageCount değeri etkilenmez
+    // 10. Admin Book.PageCount değişince kişisel PageCount korunur
     [Fact]
     public async Task AdminUpdatesBookPageCount_UserBookPageCountRemainsIndependent()
     {
@@ -264,5 +265,108 @@ public class PersonalPageCountEndpointTests : IClassFixture<CustomWebApplication
         var paged = await libRes.Content.ReadFromJsonAsync<PagedResponse<UserBookDto>>();
         var userRecord = paged!.Items.First(x => x.Id == ub!.Id);
         Assert.Equal(200, userRecord.PageCount);
+    }
+
+    // ===== 7.4-D.3: Yeni JSON güvenliği testleri =====
+
+    private static StringContent JsonBody(string json)
+        => new(json, System.Text.Encoding.UTF8, "application/json");
+
+    private static async Task<UserBookDto> GetUserBookFromLibraryAsync(HttpClient client, int userBookId)
+    {
+        var res = await client.GetAsync("/api/library");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var paged = await res.Content.ReadFromJsonAsync<PagedResponse<UserBookDto>>();
+        return paged!.Items.First(x => x.Id == userBookId);
+    }
+
+    private async Task<(HttpClient Client, UserBookDto UserBook)> CreateUserBookWithPageCountAsync(
+        string email, string title, int pageCount)
+    {
+        var (client, _) = await CreateUserAsync(email);
+        var book = await CreateBookAsync(client, title, pageCount);
+        var addRes = await client.PostAsJsonAsync("/api/library", new AddToLibraryRequest { BookId = book.Id });
+        Assert.Equal(HttpStatusCode.Created, addRes.StatusCode);
+        var ub = await addRes.Content.ReadFromJsonAsync<UserBookDto>();
+        return (client, ub!);
+    }
+
+    // 11. Boş JSON 400 döner ve mevcut PageCount korunur
+    [Fact]
+    public async Task UpdatePageCount_JsonEmptyBody_Returns400_AndKeepsPageCount()
+    {
+        var (client, ub) = await CreateUserBookWithPageCountAsync(
+            "ppc_json_empty@test.com", "Json Empty Book", 300);
+
+        var putRes = await client.PutAsync(
+            $"/api/library/{ub.Id}/page-count", JsonBody("{}"));
+        Assert.Equal(HttpStatusCode.BadRequest, putRes.StatusCode);
+
+        var error = await putRes.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.True(error.TryGetProperty("message", out _));
+
+        var after = await GetUserBookFromLibraryAsync(client, ub.Id);
+        Assert.Equal(300, after.PageCount);
+    }
+
+    // 12. Yanlış alan adı 400 döner ve mevcut PageCount korunur
+    [Fact]
+    public async Task UpdatePageCount_JsonWrongPropertyName_Returns400_AndKeepsPageCount()
+    {
+        var (client, ub) = await CreateUserBookWithPageCountAsync(
+            "ppc_json_wrongkey@test.com", "Json Wrong Key Book", 300);
+
+        var putRes = await client.PutAsync(
+            $"/api/library/{ub.Id}/page-count",
+            JsonBody("{\"page_count\":250}"));
+        Assert.Equal(HttpStatusCode.BadRequest, putRes.StatusCode);
+
+        var after = await GetUserBookFromLibraryAsync(client, ub.Id);
+        Assert.Equal(300, after.PageCount);
+    }
+
+    // 13. Açık null 200 döner, PageCount temizlenir, CurrentPage korunur
+    [Fact]
+    public async Task UpdatePageCount_JsonExplicitNull_Returns200_AndClearsPageCount()
+    {
+        var (client, ub) = await CreateUserBookWithPageCountAsync(
+            "ppc_json_null@test.com", "Json Null Book", 300);
+
+        var progressRes = await client.PutAsJsonAsync(
+            $"/api/library/{ub.Id}/progress",
+            new UpdateProgressRequest { CurrentPage = 120 });
+        Assert.Equal(HttpStatusCode.OK, progressRes.StatusCode);
+
+        var putRes = await client.PutAsync(
+            $"/api/library/{ub.Id}/page-count",
+            JsonBody("{\"pageCount\":null}"));
+        Assert.Equal(HttpStatusCode.OK, putRes.StatusCode);
+
+        var updated = await putRes.Content.ReadFromJsonAsync<UserBookDto>();
+        Assert.Null(updated!.PageCount);
+        Assert.Equal(120, updated.CurrentPage);
+
+        var after = await GetUserBookFromLibraryAsync(client, ub.Id);
+        Assert.Null(after.PageCount);
+        Assert.Equal(120, after.CurrentPage);
+    }
+
+    // 14. Normal değer 200 döner ve PageCount güncellenir
+    [Fact]
+    public async Task UpdatePageCount_JsonValue_Returns200_AndUpdatesPageCount()
+    {
+        var (client, ub) = await CreateUserBookWithPageCountAsync(
+            "ppc_json_value@test.com", "Json Value Book", 300);
+
+        var putRes = await client.PutAsync(
+            $"/api/library/{ub.Id}/page-count",
+            JsonBody("{\"pageCount\":250}"));
+        Assert.Equal(HttpStatusCode.OK, putRes.StatusCode);
+
+        var updated = await putRes.Content.ReadFromJsonAsync<UserBookDto>();
+        Assert.Equal(250, updated!.PageCount);
+
+        var after = await GetUserBookFromLibraryAsync(client, ub.Id);
+        Assert.Equal(250, after.PageCount);
     }
 }
