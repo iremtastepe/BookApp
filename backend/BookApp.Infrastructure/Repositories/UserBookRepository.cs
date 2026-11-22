@@ -1,4 +1,5 @@
 using BookApp.Application.DTOs.Library;
+using BookApp.Application.Exceptions;
 using BookApp.Application.Interfaces;
 using BookApp.Domain.Entities;
 using BookApp.Infrastructure.Data;
@@ -9,6 +10,9 @@ namespace BookApp.Infrastructure.Repositories;
 public class UserBookRepository : IUserBookRepository
 {
     private readonly AppDbContext _context;
+
+    // 7.4-C.2 (R5): UserId ve BookId benzersizlik indeksi.
+    private const string UserBookUniqueIndexName = "IX_UserBooks_UserId_BookId";
 
     public UserBookRepository(AppDbContext context)
     {
@@ -21,9 +25,30 @@ public class UserBookRepository : IUserBookRepository
     public async Task<UserBook> AddAsync(UserBook userBook)
     {
         _context.UserBooks.Add(userBook);
-        await _context.SaveChangesAsync();
+
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsUserBookUniqueViolation(ex))
+        {
+            // Başarısız ekleme işlemini EF Core takibinden çıkar.
+            _context.Entry(userBook).State = EntityState.Detached;
+
+            // Controller mevcut InvalidOperationException yakalama bloğuyla
+            // bu hatayı HTTP 409 Conflict olarak karşılayacak.
+            throw new UserBookAlreadyExistsException(ex);
+        }
+
         return userBook;
     }
+
+    // Yalnızca ilgili benzersizlik indeksi için PostgreSQL 23505 hatasını yakala.
+    // Diğer veritabanı hatalarını değiştirme.
+    private static bool IsUserBookUniqueViolation(DbUpdateException ex)
+        => ex.InnerException is Npgsql.PostgresException pg
+           && pg.SqlState == Npgsql.PostgresErrorCodes.UniqueViolation
+           && pg.ConstraintName == UserBookUniqueIndexName;
 
     public Task<UserBook?> GetByIdWithBookAsync(int id, int userId)
         => _context.UserBooks
@@ -74,6 +99,7 @@ public class UserBookRepository : IUserBookRepository
         userBooks = query.Archived
             ? userBooks.Where(ub => ub.ArchivedAt != null)
             : userBooks.Where(ub => ub.ArchivedAt == null);
+
         // Toplam sayı, sayfalamadan ÖNCE hesaplanır: "bu filtreyle toplam kaç kitap var?"
         var total = await userBooks.CountAsync();
 
@@ -82,10 +108,10 @@ public class UserBookRepository : IUserBookRepository
         IOrderedQueryable<UserBook> ordered = query.SortBy switch
         {
             LibrarySortBy.Title => isDesc
-    ? userBooks.OrderByDescending(ub =>
-        EF.Functions.Collate(ub.Book.Title, "tr-x-icu"))
-    : userBooks.OrderBy(ub =>
-        EF.Functions.Collate(ub.Book.Title, "tr-x-icu")),
+                ? userBooks.OrderByDescending(ub =>
+                    EF.Functions.Collate(ub.Book.Title, "tr-x-icu"))
+                : userBooks.OrderBy(ub =>
+                    EF.Functions.Collate(ub.Book.Title, "tr-x-icu")),
 
             // PostgreSQL'de NULL'lar artan sıralamada sonda, azalanda başta gelir.
             // Puansız kitapların her iki yönde de sonda kalması için önce "puanı boş mu?" diye sıralarız
@@ -117,6 +143,7 @@ public class UserBookRepository : IUserBookRepository
         {
             throw new InvalidOperationException("Detached nesneler doğrudan güncellenemez. Güncelleme için izlenen (tracked) entity kullanılmalıdır.");
         }
+
         return _context.SaveChangesAsync();
     }
 
