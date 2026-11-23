@@ -88,6 +88,9 @@ public class UserBook
     // Kullanıcının sahip olduğu nüshanın bağımsız sayfa sayısı (ortak katalogdan bağımsız yönetilir)
     public int? PageCount { get; set; }
 
+    // 7.4-C.3 (R4): PostgreSQL xmin optimistic concurrency token
+    public uint Version { get; set; }
+
     // Bu UserBook'a bağlı sayfa-numaralı notlar (şimdilik kullanılmıyor, ertelenen özellik)
     public ICollection<Note> Notes { get; set; } = new List<Note>();
 }

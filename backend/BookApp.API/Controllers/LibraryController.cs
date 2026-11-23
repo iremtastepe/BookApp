@@ -71,6 +71,10 @@ public class LibraryController : ControllerBase
         {
             return Conflict(new { message = ex.Message });
         }
+        catch (UserBookConcurrencyException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
         catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
@@ -93,6 +97,10 @@ public class LibraryController : ControllerBase
         {
             return Conflict(new { message = ex.Message });
         }
+        catch (UserBookConcurrencyException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
         catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
@@ -112,6 +120,10 @@ public class LibraryController : ControllerBase
             return NotFound(new { message = ex.Message });
         }
         catch (ArchivedUserBookException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (UserBookConcurrencyException ex)
         {
             return Conflict(new { message = ex.Message });
         }
@@ -167,6 +179,10 @@ public class LibraryController : ControllerBase
         {
             return Conflict(new { message = ex.Message });
         }
+        catch (UserBookConcurrencyException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
         catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
@@ -200,6 +216,10 @@ public class LibraryController : ControllerBase
         catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+        catch (UserBookConcurrencyException ex)
+        {
+            return Conflict(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
@@ -269,6 +289,10 @@ public class LibraryController : ControllerBase
             return NotFound(new { message = ex.Message });
         }
         catch (ArchivedUserBookException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (UserBookConcurrencyException ex)
         {
             return Conflict(new { message = ex.Message });
         }

@@ -136,7 +136,7 @@ public class UserBookRepository : IUserBookRepository
         return (items, total);
     }
 
-    public Task UpdateAsync(UserBook userBook)
+    public async Task UpdateAsync(UserBook userBook)
     {
         var entry = _context.Entry(userBook);
         if (entry.State == EntityState.Detached)
@@ -144,7 +144,15 @@ public class UserBookRepository : IUserBookRepository
             throw new InvalidOperationException("Detached nesneler doğrudan güncellenemez. Güncelleme için izlenen (tracked) entity kullanılmalıdır.");
         }
 
-        return _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            entry.State = EntityState.Detached;
+            throw new UserBookConcurrencyException(ex);
+        }
     }
 
     public Task<int> GetReadBooksCountByYearAsync(int userId, int year)

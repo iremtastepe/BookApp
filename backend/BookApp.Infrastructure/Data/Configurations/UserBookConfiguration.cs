@@ -49,6 +49,10 @@ public class UserBookConfiguration : IEntityTypeConfiguration<UserBook>
         // UserId ve BookId ikilisi birlikte benzersiz olsun
         // Yani UserId=1, BookId=5 sadece bir kere olabilir.
 
+        // 7.4-C.3 (R4): PostgreSQL xmin sistem sütunu üzerinden optimistic concurrency token
+        builder.Property(ub => ub.Version)
+            .IsRowVersion();
+
         builder.HasOne(ub => ub.User)
         // "Her UserBook'un bir tane User'ı var" (One-to-Many ilişkinin "One" tarafı).
             .WithMany(u => u.UserBooks)
