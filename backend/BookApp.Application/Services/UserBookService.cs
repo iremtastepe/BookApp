@@ -518,7 +518,7 @@ public class UserBookService : IUserBookService
                 throw new ArgumentException("Sayfa sayısı 1 ile 10000 arasında olmalı veya boş bırakılmalıdır.");
             }
 
-            if (userBook.Status == ReadingStatus.Reading && userBook.CurrentPage.HasValue && userBook.CurrentPage.Value > request.PageCount.Value)
+           if (userBook.Status != ReadingStatus.Read && userBook.CurrentPage.HasValue && userBook.CurrentPage.Value > request.PageCount.Value)
             {
                 throw new ArgumentException($"Yeni sayfa sayısı ({request.PageCount.Value}), mevcut ilerlemenizden ({userBook.CurrentPage.Value}) daha az olamaz.");
             }

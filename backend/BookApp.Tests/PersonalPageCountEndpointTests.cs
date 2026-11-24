@@ -1,4 +1,3 @@
-
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -163,6 +162,70 @@ public class PersonalPageCountEndpointTests : IClassFixture<CustomWebApplication
         var err = await putRes.Content.ReadAsStringAsync();
         Assert.Contains("250", err);
     }
+
+    // ===== 7.4-C.4: Yeni sayfa tutarlılığı testleri =====
+
+    // Okundu dışındaki üç durumda toplam sayfa sayısı,
+    // mevcut okuma ilerlemesinin altına düşürülemez.
+    [Theory]
+    [InlineData(ReadingStatus.NotStarted)]
+    [InlineData(ReadingStatus.NextUp)]
+    [InlineData(ReadingStatus.DidNotFinish)]
+    public async Task UpdatePageCount_NonRead_BelowCurrentPage_Returns400(
+        ReadingStatus targetStatus)
+    {
+        var (client, ub) = await CreateUserBookWithPageCountAsync(
+            $"ppc_c4_{(int)targetStatus}@test.com",
+            $"C4 Test Book {targetStatus}",
+            400);
+
+        // Önce 250. sayfaya ilerle
+        var progressRes = await client.PutAsJsonAsync(
+            $"/api/library/{ub.Id}/progress",
+            new UpdateProgressRequest { CurrentPage = 250 });
+
+        Assert.Equal(HttpStatusCode.OK, progressRes.StatusCode);
+
+        // Kitabı test edilecek okuma durumuna al
+        var statusRes = await client.PutAsJsonAsync(
+            $"/api/library/{ub.Id}/status",
+            new UpdateUserBookStatusRequest
+            {
+                Status = targetStatus
+            });
+
+        Assert.Equal(HttpStatusCode.OK, statusRes.StatusCode);
+
+        // Değişiklik öncesi verileri doğrula
+        var before = await GetUserBookFromLibraryAsync(client, ub.Id);
+
+        Assert.Equal(targetStatus, before.Status);
+        Assert.Equal(250, before.CurrentPage);
+        Assert.Equal(400, before.PageCount);
+
+        // Toplam sayfayı mevcut ilerlemenin altına düşürmeyi dene
+        var putRes = await client.PutAsJsonAsync(
+            $"/api/library/{ub.Id}/page-count",
+            new UpdateUserBookPageCountRequest
+            {
+                PageCount = 200
+            });
+
+        // Hatalı güncelleme reddedilmeli
+        Assert.Equal(HttpStatusCode.BadRequest, putRes.StatusCode);
+
+        var error = await putRes.Content.ReadAsStringAsync();
+        Assert.Contains("250", error);
+
+        // Hata sonrasında hiçbir bilgi değişmemeli
+        var after = await GetUserBookFromLibraryAsync(client, ub.Id);
+
+        Assert.Equal(400, after.PageCount);
+        Assert.Equal(250, after.CurrentPage);
+        Assert.Equal(targetStatus, after.Status);
+    }
+
+    // ===== 7.4-C.4 yeni testlerin sonu =====
 
     // 6. Read durumunda yeni PageCount biliniyorsa CurrentPage yeni PageCount'a eşitlenir
     [Fact]
