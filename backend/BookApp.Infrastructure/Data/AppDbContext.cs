@@ -20,6 +20,12 @@ public class AppDbContext : IdentityDbContext<User, IdentityRole<int>, int>
     {
         base.OnModelCreating(builder);
 
+        // Ortak katalogda ayni ISBN birden fazla kitapta bulunamaz.
+        // PostgreSQL UNIQUE index birden fazla NULL degerine izin verir.
+        builder.Entity<Book>()
+            .HasIndex(b => b.Isbn)
+            .IsUnique();
+
         // Identity tablo isimleri
         builder.Entity<User>().ToTable("Users");
         builder.Entity<IdentityRole<int>>().ToTable("Roles");

@@ -1,4 +1,5 @@
 using BookApp.Application.DTOs.Books;
+using BookApp.Application.Exceptions;
 using BookApp.Application.Helpers;
 using BookApp.Application.Interfaces;
 using BookApp.Application.Interfaces.ExternalServices;
@@ -56,7 +57,7 @@ public class BookService : IBookService
         {
             Title = request.Title.Trim(),
             Author = request.Author.Trim(),
-            Isbn = normalizedIsbn, // DEGISTI
+            Isbn = normalizedIsbn,
             CoverImageUrl = request.CoverImageUrl,
             Description = request.Description,
             PageCount = request.PageCount,
@@ -89,7 +90,7 @@ public class BookService : IBookService
 
         book.Title = request.Title.Trim();
         book.Author = request.Author.Trim();
-        book.Isbn = normalizedIsbn; // DEGISTI
+        book.Isbn = normalizedIsbn;
         book.CoverImageUrl = request.CoverImageUrl;
         book.Description = request.Description;
         book.PageCount = request.PageCount;
@@ -116,7 +117,7 @@ public class BookService : IBookService
 
     public async Task<BookResponse> FindOrFetchByIsbnAsync(string isbn)
     {
-        // DEGISTI: Trim yerine tam normalizasyon (temizle, dogrula, ISBN-13)
+        // ISBN'yi temizle, dogrula ve ISBN-13'e cevir.
         var normalizedIsbn = IsbnHelper.Normalize(isbn);
 
         var existingBook = await _repo.GetByIsbnAsync(normalizedIsbn);
@@ -135,7 +136,7 @@ public class BookService : IBookService
         {
             Title = externalBook.Title,
             Author = externalBook.Author,
-            Isbn = normalizedIsbn, // DEGISTI: aranan ISBN kaydedilir, ayni ISBN tekrar aranirsa DB'de bulunur
+            Isbn = normalizedIsbn,
             CoverImageUrl = externalBook.CoverImageUrl,
             Description = externalBook.Description,
             PageCount = externalBook.PageCount,
@@ -143,9 +144,27 @@ public class BookService : IBookService
             Genre = externalBook.Genre
         };
 
-        await _repo.AddAsync(newBook);
+        try
+        {
+            await _repo.AddAsync(newBook);
 
-        return ToResponse(newBook);
+            return ToResponse(newBook);
+        }
+        catch (BookIsbnAlreadyExistsException)
+        {
+            // Baska bir istek ayni ISBN'li kitabi bizden once eklemis.
+            // Yeni kayit olusturmak yerine mevcut kitabi getir.
+            var concurrentBook = await _repo.GetByIsbnAsync(normalizedIsbn);
+
+            if (concurrentBook is not null)
+            {
+                return ToResponse(concurrentBook);
+            }
+
+            // ISBN cakismasi olustu ancak kayit bulunamadi.
+            // Beklenmeyen hatayi gizleme.
+            throw;
+        }
     }
 
     private static BookResponse ToResponse(Book b) => new()
