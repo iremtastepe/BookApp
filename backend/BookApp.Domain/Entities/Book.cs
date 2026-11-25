@@ -14,5 +14,10 @@ public class Book
     public int? PublishedYear { get; set; }
     public string? Genre { get; set; }
 
+    // 7.4-C.5: Ortak katalog olusturucu bilgileri
+    public int? CreatedByUserId { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public BookCreationSource? CreatedSource { get; set; }
+
     public ICollection<UserBook> UserBooks { get; set; } = new List<UserBook>();
 }

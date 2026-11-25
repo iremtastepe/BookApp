@@ -10,6 +10,7 @@ namespace BookApp.Tests;
 public class BookServiceValidationTests
 {
     private const string ValidIsbn = "9780306406157";
+    private const int TestUserId = 42;
 
     private static (BookService Service, FakeBookRepository Repo)
         CreateService(ExternalBookDto? externalBook = null)
@@ -57,6 +58,7 @@ public class BookServiceValidationTests
         var (service, repo) = CreateService();
 
         var result = await service.CreateAsync(
+            TestUserId,
             NewCreateRequest(coverUrl: url));
 
         Assert.Equal(url, result.CoverImageUrl);
@@ -74,6 +76,7 @@ public class BookServiceValidationTests
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => service.CreateAsync(
+                TestUserId,
                 NewCreateRequest(coverUrl: url)));
 
         Assert.Equal(0, repo.AddCalls);
@@ -90,6 +93,7 @@ public class BookServiceValidationTests
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => service.CreateAsync(
+                TestUserId,
                 NewCreateRequest(coverUrl: url)));
 
         Assert.Equal(0, repo.AddCalls);
@@ -105,6 +109,7 @@ public class BookServiceValidationTests
         var (service, repo) = CreateService();
 
         var result = await service.CreateAsync(
+            TestUserId,
             NewCreateRequest(coverUrl: url));
 
         Assert.Null(result.CoverImageUrl);
@@ -119,6 +124,7 @@ public class BookServiceValidationTests
         var description = new string('a', 2000);
 
         var result = await service.CreateAsync(
+            TestUserId,
             NewCreateRequest(description: description));
 
         Assert.Equal(2000, result.Description?.Length);
@@ -133,6 +139,7 @@ public class BookServiceValidationTests
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => service.CreateAsync(
+                TestUserId,
                 NewCreateRequest(
                     description: new string('a', 2001))));
 
@@ -255,6 +262,7 @@ public class BookServiceValidationTests
         var (service, repo) = CreateService(external);
 
         var result = await service.FindOrFetchByIsbnAsync(
+            TestUserId,
             ValidIsbn);
 
         Assert.Null(result.CoverImageUrl);
@@ -278,6 +286,7 @@ public class BookServiceValidationTests
         var (service, repo) = CreateService(external);
 
         var result = await service.FindOrFetchByIsbnAsync(
+            TestUserId,
             ValidIsbn);
 
         Assert.Equal(2000, result.Description?.Length);

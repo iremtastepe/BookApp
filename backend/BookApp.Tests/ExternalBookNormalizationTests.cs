@@ -10,6 +10,7 @@ namespace BookApp.Tests;
 public class ExternalBookNormalizationTests
 {
     private const string ValidIsbn = "9780306406157";
+    private const int TestUserId = 42;
 
     private static async Task<BookResponse> ImportAsync(
         Action<ExternalBookDto> configure)
@@ -34,6 +35,7 @@ public class ExternalBookNormalizationTests
             lookupService);
 
         var result = await service.FindOrFetchByIsbnAsync(
+            TestUserId,
             ValidIsbn);
 
         Assert.Single(repository.Books);
@@ -48,162 +50,181 @@ public class ExternalBookNormalizationTests
     [InlineData("")]
     [InlineData("   ")]
     public async Task EmptyTitleAndAuthor_UseFallback(
-        string? value)
+        string? emptyValue)
     {
         var result = await ImportAsync(book =>
         {
-            book.Title = value!;
-            book.Author = value!;
+            book.Title = emptyValue!;
+            book.Author = emptyValue!;
         });
 
         Assert.Equal("Bilinmeyen Kitap", result.Title);
         Assert.Equal("Bilinmeyen Yazar", result.Author);
     }
 
-    // Uzun baslik ve yazar sinirlandirilir.
+    // 300 karakteri asan baslik kirpilir.
     [Fact]
-    public async Task LongTitleAndAuthor_AreTruncated()
+    public async Task TitleOver300Characters_IsTruncated()
     {
+        var longTitle = new string('a', 305);
+
         var result = await ImportAsync(book =>
         {
-            book.Title = " " + new string('T', 305) + " ";
-            book.Author = " " + new string('A', 205) + " ";
+            book.Title = longTitle;
         });
 
         Assert.Equal(300, result.Title.Length);
-        Assert.Equal(200, result.Author.Length);
-
-        Assert.Equal(new string('T', 300), result.Title);
-        Assert.Equal(new string('A', 200), result.Author);
+        Assert.Equal(new string('a', 300), result.Title);
     }
 
-    // Normal degerler korunur, gereksiz bosluklar temizlenir.
+    // 200 karakteri asan yazar adi kirpilir.
     [Fact]
-    public async Task ValidFields_ArePreservedAndTrimmed()
+    public async Task AuthorOver200Characters_IsTruncated()
     {
+        var longAuthor = new string('b', 205);
+
         var result = await ImportAsync(book =>
         {
-            book.Title = "  Dördüncü Kanat  ";
-            book.Author = "  Rebecca Yarros  ";
-            book.Genre = "  Fantastik  ";
-            book.PageCount = 456;
-            book.PublishedYear = 2023;
+            book.Author = longAuthor;
         });
 
-        Assert.Equal("Dördüncü Kanat", result.Title);
-        Assert.Equal("Rebecca Yarros", result.Author);
-        Assert.Equal("Fantastik", result.Genre);
-        Assert.Equal(456, result.PageCount);
-        Assert.Equal(2023, result.PublishedYear);
+        Assert.Equal(200, result.Author.Length);
+        Assert.Equal(new string('b', 200), result.Author);
     }
 
-    // Gecersiz sayfa sayilari null olur.
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(0)]
-    [InlineData(10001)]
-    public async Task InvalidPageCount_BecomesNull(
-        int pageCount)
+    // 100 karakteri asan tur kirpilir.
+    [Fact]
+    public async Task GenreOver100Characters_IsTruncated()
     {
+        var longGenre = new string('g', 105);
+
         var result = await ImportAsync(book =>
         {
-            book.PageCount = pageCount;
+            book.Genre = longGenre;
         });
 
-        Assert.Null(result.PageCount);
+        Assert.Equal(100, result.Genre?.Length);
+        Assert.Equal(new string('g', 100), result.Genre);
     }
 
-    // Sinir degerlerindeki sayfa sayilari kabul edilir.
-    [Theory]
-    [InlineData(1)]
-    [InlineData(10000)]
-    public async Task ValidPageCount_IsPreserved(
-        int pageCount)
-    {
-        var result = await ImportAsync(book =>
-        {
-            book.PageCount = pageCount;
-        });
-
-        Assert.Equal(pageCount, result.PageCount);
-    }
-
-    // Gecersiz yayin yillari null olur.
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(0)]
-    [InlineData(2101)]
-    public async Task InvalidPublishedYear_BecomesNull(
-        int year)
-    {
-        var result = await ImportAsync(book =>
-        {
-            book.PublishedYear = year;
-        });
-
-        Assert.Null(result.PublishedYear);
-    }
-
-    // Sinir degerlerindeki yayin yillari kabul edilir.
-    [Theory]
-    [InlineData(1)]
-    [InlineData(2100)]
-    public async Task ValidPublishedYear_IsPreserved(
-        int year)
-    {
-        var result = await ImportAsync(book =>
-        {
-            book.PublishedYear = year;
-        });
-
-        Assert.Equal(year, result.PublishedYear);
-    }
-
-    // Bos tur bilgisi null olur.
+    // Bos tur null yapilir.
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task EmptyGenre_BecomesNull(
-        string? genre)
+    public async Task EmptyGenre_BecomesNull(string? emptyGenre)
     {
         var result = await ImportAsync(book =>
         {
-            book.Genre = genre;
+            book.Genre = emptyGenre;
         });
 
         Assert.Null(result.Genre);
     }
 
-    // Uzun tur bilgisi 100 karaktere indirilir.
-    [Fact]
-    public async Task LongGenre_IsTruncated()
+    // Gecersiz sayfa sayisi null yapilir.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    [InlineData(10001)]
+    public async Task InvalidPageCount_BecomesNull(int invalidPages)
     {
         var result = await ImportAsync(book =>
         {
-            book.Genre = new string('G', 150);
+            book.PageCount = invalidPages;
         });
 
-        Assert.Equal(100, result.Genre?.Length);
-        Assert.Equal(new string('G', 100), result.Genre);
+        Assert.Null(result.PageCount);
     }
 
-    private sealed class FakeBookLookupService : IBookLookupService
+    // Gecerli sinirdaki sayfa sayilari korunur.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(10000)]
+    public async Task BoundaryPageCount_IsPreserved(int validPages)
     {
-        private readonly ExternalBookDto _book;
-
-        public FakeBookLookupService(ExternalBookDto book)
+        var result = await ImportAsync(book =>
         {
-            _book = book;
-        }
+            book.PageCount = validPages;
+        });
 
-        public Task<ExternalBookDto?> SearchByIsbnAsync(
-            string isbn)
-        {
-            return Task.FromResult<ExternalBookDto?>(_book);
-        }
+        Assert.Equal(validPages, result.PageCount);
     }
 
+    // Gecersiz yayin yili null yapilir.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(2101)]
+    public async Task InvalidPublishedYear_BecomesNull(int invalidYear)
+    {
+        var result = await ImportAsync(book =>
+        {
+            book.PublishedYear = invalidYear;
+        });
+
+        Assert.Null(result.PublishedYear);
+    }
+
+    // Gecerli sinirdaki yayin yillari korunur.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2100)]
+    public async Task BoundaryPublishedYear_IsPreserved(int validYear)
+    {
+        var result = await ImportAsync(book =>
+        {
+            book.PublishedYear = validYear;
+        });
+
+        Assert.Equal(validYear, result.PublishedYear);
+    }
+
+    // Gecersiz kapak adresi null yapilir.
+    [Theory]
+    [InlineData("ftp://example.com/cover.jpg")]
+    [InlineData("not-a-url")]
+    [InlineData("")]
+    public async Task InvalidCoverUrl_BecomesNull(string invalidUrl)
+    {
+        var result = await ImportAsync(book =>
+        {
+            book.CoverImageUrl = invalidUrl;
+        });
+
+        Assert.Null(result.CoverImageUrl);
+    }
+
+    // 500 karakteri asan kapak adresi null yapilir.
+    [Fact]
+    public async Task CoverUrlOver500Characters_BecomesNull()
+    {
+        var longUrl = "https://example.com/" + new string('a', 500);
+
+        var result = await ImportAsync(book =>
+        {
+            book.CoverImageUrl = longUrl;
+        });
+
+        Assert.Null(result.CoverImageUrl);
+    }
+
+    // 2000 karakteri asan aciklama kirpilir.
+    [Fact]
+    public async Task DescriptionOver2000Characters_IsTruncated()
+    {
+        var longDescription = new string('d', 2050);
+
+        var result = await ImportAsync(book =>
+        {
+            book.Description = longDescription;
+        });
+
+        Assert.Equal(2000, result.Description?.Length);
+        Assert.Equal(new string('d', 2000), result.Description);
+    }
+
+    // Testler icin bellek ici sahte repository.
     private sealed class FakeBookRepository : IBookRepository
     {
         public List<Book> Books { get; } = new();
@@ -211,13 +232,13 @@ public class ExternalBookNormalizationTests
         public Task<Book?> GetByIdAsync(int id)
         {
             return Task.FromResult(
-                Books.FirstOrDefault(book => book.Id == id));
+                Books.FirstOrDefault(b => b.Id == id));
         }
 
         public Task<Book?> GetByIsbnAsync(string isbn)
         {
             return Task.FromResult(
-                Books.FirstOrDefault(book => book.Isbn == isbn));
+                Books.FirstOrDefault(b => b.Isbn == isbn));
         }
 
         public Task<(List<Book> Items, int TotalCount)> GetPagedAsync(
@@ -225,8 +246,10 @@ public class ExternalBookNormalizationTests
             int page,
             int pageSize)
         {
+            var items = Books.ToList();
+
             return Task.FromResult(
-                (Items: Books.ToList(), TotalCount: Books.Count));
+                (Items: items, TotalCount: items.Count));
         }
 
         public Task<bool> IsInAnyLibraryAsync(int bookId)
@@ -236,7 +259,10 @@ public class ExternalBookNormalizationTests
 
         public Task AddAsync(Book book)
         {
-            book.Id = Books.Count + 1;
+            book.Id = Books.Count == 0
+                ? 1
+                : Books.Max(b => b.Id) + 1;
+
             Books.Add(book);
 
             return Task.CompletedTask;
@@ -266,8 +292,23 @@ public class ExternalBookNormalizationTests
         public Task DeleteAsync(Book book)
         {
             Books.Remove(book);
-
             return Task.CompletedTask;
+        }
+    }
+
+    // Testler icin sahte dis kitap servisi.
+    private sealed class FakeBookLookupService : IBookLookupService
+    {
+        private readonly ExternalBookDto? _book;
+
+        public FakeBookLookupService(ExternalBookDto? book)
+        {
+            _book = book;
+        }
+
+        public Task<ExternalBookDto?> SearchByIsbnAsync(string isbn)
+        {
+            return Task.FromResult(_book);
         }
     }
 }

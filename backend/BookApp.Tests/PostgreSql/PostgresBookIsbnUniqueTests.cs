@@ -267,6 +267,8 @@ public class PostgresBookIsbnUniqueTests
         }
     }
 
+    private const int TestUserId = 42;
+
     private async Task<(int? BookId, Exception? Error)> RunFetchAsync(
         string isbn,
         RaceGate gate)
@@ -281,7 +283,7 @@ public class PostgresBookIsbnUniqueTests
         try
         {
             var result =
-                await service.FindOrFetchByIsbnAsync(isbn);
+                await service.FindOrFetchByIsbnAsync(TestUserId, isbn);
 
             return (result.Id, null);
         }

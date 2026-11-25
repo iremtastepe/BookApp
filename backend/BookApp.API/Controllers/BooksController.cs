@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using BookApp.Application.DTOs.Books;
 using BookApp.Application.Exceptions;
 using BookApp.Application.Interfaces;
@@ -17,6 +18,16 @@ public class BooksController : ControllerBase
     public BooksController(IBookService bookService)
     {
         _bookService = bookService;
+    }
+
+    private int GetUserId()
+    {
+        var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrWhiteSpace(claim) || !int.TryParse(claim, out var userId) || userId <= 0)
+        {
+            throw new UnauthorizedAccessException("Geçerli bir kullanıcı kimliği bulunamadı.");
+        }
+        return userId;
     }
 
     [HttpGet]
@@ -45,9 +56,19 @@ public class BooksController : ControllerBase
         if (string.IsNullOrWhiteSpace(isbn))
             return BadRequest(new { message = "ISBN boş olamaz." });
 
+        int userId;
         try
         {
-            var book = await _bookService.FindOrFetchByIsbnAsync(isbn);
+            userId = GetUserId();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+
+        try
+        {
+            var book = await _bookService.FindOrFetchByIsbnAsync(userId, isbn);
             return Ok(book);
         }
         catch (ArgumentException ex)
@@ -76,9 +97,19 @@ public class BooksController : ControllerBase
     public async Task<ActionResult<BookResponse>> Create(
         CreateBookRequest request)
     {
+        int userId;
         try
         {
-            var created = await _bookService.CreateAsync(request);
+            userId = GetUserId();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+
+        try
+        {
+            var created = await _bookService.CreateAsync(userId, request);
 
             return CreatedAtAction(
                 nameof(GetById),

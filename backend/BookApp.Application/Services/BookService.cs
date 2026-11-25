@@ -4,6 +4,7 @@ using BookApp.Application.Helpers;
 using BookApp.Application.Interfaces;
 using BookApp.Application.Interfaces.ExternalServices;
 using BookApp.Domain.Entities;
+using BookApp.Domain.Enums;
 
 namespace BookApp.Application.Services;
 
@@ -60,8 +61,16 @@ public class BookService : IBookService
     }
 
     public async Task<BookResponse> CreateAsync(
+        int userId,
         CreateBookRequest request)
     {
+        if (userId <= 0)
+        {
+            throw new ArgumentException(
+                "Kitap oluşturmak için geçerli bir kullanıcı kimliği gereklidir.",
+                nameof(userId));
+        }
+
         // ISBN doluysa temizle, dogrula ve ISBN-13'e cevir.
         var normalizedIsbn = string.IsNullOrWhiteSpace(request.Isbn)
             ? null
@@ -89,7 +98,10 @@ public class BookService : IBookService
             Description = description,
             PageCount = request.PageCount,
             PublishedYear = request.PublishedYear,
-            Genre = request.Genre
+            Genre = request.Genre,
+            CreatedByUserId = userId,
+            CreatedAt = DateTime.UtcNow,
+            CreatedSource = BookCreationSource.Manual
         };
 
         await _repo.AddAsync(book);
@@ -145,6 +157,7 @@ public class BookService : IBookService
         book.PageCount = request.PageCount;
         book.PublishedYear = request.PublishedYear;
         book.Genre = request.Genre;
+        // 7.4-C.5: CreatedByUserId, CreatedAt ve CreatedSource degistirilmez, aynen korunur.
 
         await _repo.UpdateAsync(book);
 
@@ -172,8 +185,16 @@ public class BookService : IBookService
     }
 
     public async Task<BookResponse> FindOrFetchByIsbnAsync(
+        int userId,
         string isbn)
     {
+        if (userId <= 0)
+        {
+            throw new ArgumentException(
+                "ISBN ile kitap aramak veya eklemek için geçerli bir kullanıcı kimliği gereklidir.",
+                nameof(userId));
+        }
+
         // ISBN'yi temizle, dogrula ve ISBN-13'e cevir.
         var normalizedIsbn = IsbnHelper.Normalize(isbn);
 
@@ -227,7 +248,11 @@ public class BookService : IBookService
 
             Genre = NormalizeExternalOptionalText(
                 externalBook.Genre,
-                MaxGenreLength)
+                MaxGenreLength),
+
+            CreatedByUserId = userId,
+            CreatedAt = DateTime.UtcNow,
+            CreatedSource = BookCreationSource.ExternalLookup
         };
 
         try
